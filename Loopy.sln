@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Loopy", "Loopy\Loopy.csproj", "{1446CA97-8164-41FA-8C16-15ECE8801EDE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Loopy.Test", "Loopy.Test\Loopy.Test.csproj", "{91855C84-48AA-450E-ACC5-6C458E2368F2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1446CA97-8164-41FA-8C16-15ECE8801EDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1446CA97-8164-41FA-8C16-15ECE8801EDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1446CA97-8164-41FA-8C16-15ECE8801EDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1446CA97-8164-41FA-8C16-15ECE8801EDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{91855C84-48AA-450E-ACC5-6C458E2368F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{91855C84-48AA-450E-ACC5-6C458E2368F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{91855C84-48AA-450E-ACC5-6C458E2368F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{91855C84-48AA-450E-ACC5-6C458E2368F2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
