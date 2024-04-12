@@ -1,6 +1,6 @@
-namespace Loopy;
+namespace Loopy.Data;
 
-public static class Extensions
+public static class DictionaryExtensions
 {
     public static void MergeIn<TK, TV>(this Dictionary<TK, TV> dict,
         IEnumerable<KeyValuePair<TK, TV>> pairs,
@@ -29,8 +29,13 @@ public static class Extensions
         }
     }
 
-    public static bool ContainsDot(this SafeDict<NodeId, int> cc, Dot dot)
+    public static string ValuesToString<TK, TV>(this Dictionary<TK, TV> dict) where TK : notnull
     {
-        return cc[dot.NodeId] >= dot.UpdateId;
+        if (dict.Count == 0)
+            return "-";
+        
+        return string.Join(", ", dict
+            .Select(kv => $"{kv.Key}={kv.Value}")
+            .OrderBy(v => v));
     }
 }

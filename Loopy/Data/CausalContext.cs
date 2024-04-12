@@ -1,0 +1,21 @@
+namespace Loopy.Data;
+
+/// <summary>
+/// Causal context: past versions
+/// </summary>
+public class CausalContext : Map<NodeId, int>
+{
+    public CausalContext()
+    {
+    }
+
+    public CausalContext(Map<NodeId, int> cc) : base(cc)
+    {
+    }
+
+    public static CausalContext Initial => new();
+
+    public bool Contains(Dot dot) => dot.UpdateId <= this[dot.NodeId];
+
+    public override string ToString() => this.ValuesToString();
+}

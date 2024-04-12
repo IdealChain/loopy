@@ -1,16 +1,22 @@
-namespace Loopy;
+namespace Loopy.Data;
 
-public class SafeDict<TKey, TValue> : Dictionary<TKey, TValue>
+/// <summary>
+/// "Safe" key-value dictionary that returns a default value for non-existing keys
+/// </summary>
+public class Map<TKey, TValue> : Dictionary<TKey, TValue>
     where TValue : new()
     where TKey : notnull
 {
     private Lazy<bool> _storeCreatedValue = new(() => !typeof(TValue).IsValueType);
-    
-    public SafeDict()
-    { }
 
-    public SafeDict(IDictionary<TKey, TValue> dict) : base(dict)
-    { }
+    public Map()
+    {
+    }
+
+    public Map(IEnumerable<KeyValuePair<TKey, TValue>>? dict)
+        : base(dict ?? Enumerable.Empty<KeyValuePair<TKey, TValue>>())
+    {
+    }
 
     public new TValue this[TKey key]
     {
