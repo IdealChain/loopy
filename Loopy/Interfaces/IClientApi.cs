@@ -1,20 +1,7 @@
 using Loopy.Data;
+using Loopy.Enums;
 
 namespace Loopy.Interfaces;
-
-public enum ReplicationMode
-{
-    Sync,
-    Async,
-    None,
-}
-
-public enum ConsistencyMode
-{
-    Eventual,
-    Fifo,
-    Causal,
-}
 
 /// <summary>
 /// Client API at Node

@@ -10,6 +10,7 @@ public partial class Node
     {
         while (!cancellationToken.IsCancellationRequested)
         {
+            using (await NodeLock.Enter(cancellationToken))
             using (ScopeContext.PushNestedState("StripCausality"))
             {
                 Logger.Trace("stripping...");
@@ -34,7 +35,9 @@ public partial class Node
                 var p = peerNodes[rand.Next(peerNodes.Length)];
                 Logger.Trace("syncing with {Node}...", p);
                 var (pNodeClock, pMissingObjects) = await Context.GetNodeApi(p).SyncClock(i, NodeClock);
-                SyncRepair(p, pNodeClock, pMissingObjects);
+                
+                using (await NodeLock.Enter(cancellationToken))
+                    SyncRepair(p, pNodeClock, pMissingObjects);
             }
 
             await Task.Delay(syncInterval, cancellationToken).ContinueWith(_ => { });

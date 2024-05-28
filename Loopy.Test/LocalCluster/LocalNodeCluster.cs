@@ -1,5 +1,6 @@
 using System.Collections;
 using Loopy.Data;
+using Loopy.Enums;
 using Loopy.Interfaces;
 using Object = Loopy.Data.Object;
 
@@ -63,39 +64,44 @@ public class LocalNodeCluster : IEnumerable<NodeId>, INodeContext
     private class RemoteNodeApiWrapper : IRemoteNodeApi
     {
         private readonly Node _node;
-        private readonly int _latency;
 
-        public RemoteNodeApiWrapper(Node node, int latency = 10)
+        public RemoteNodeApiWrapper(Node node)
         {
             _node = node;
-            _latency = latency;
         }
 
-        public Task<Object> Fetch(Key k, ConsistencyMode mode)
+        public async Task<Object> Fetch(Key k, ConsistencyMode mode)
         {
-            // Thread.Sleep(_latency / 10);
+            var modePart = (ConsistencyMode)((int)mode & 0x0F);
+            var prioPart = (Priority)(((int)mode & 0xF0) >> 4);
 
-            switch (mode)
+            using (await _node.NodeLock.Enter(CancellationToken.None))
             {
-                case ConsistencyMode.Eventual: return Task.FromResult(_node.Fetch(k));
-                case ConsistencyMode.Fifo: return Task.FromResult(_node.FetchFifo(k));
-                case ConsistencyMode.Causal: return Task.FromResult(_node.FetchCausal(k));
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(mode));
+                switch (modePart)
+                {
+                    case ConsistencyMode.Eventual:
+                        return _node.Fetch(k);
+                    case ConsistencyMode.Fifo:
+                        return _node.FetchFifo(k, prioPart);
+                    case ConsistencyMode.Causal:
+                        return _node.FetchCausal(k);
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(mode));
+                }
             }
         }
 
-        public Task<Object> Update(Key k, Object o)
+        public async Task<Object> Update(Key k, Object o)
         {
-            // Thread.Sleep(_latency);
-            return Task.FromResult(_node.Update(k, o));
+            using (await _node.NodeLock.Enter(CancellationToken.None))
+                return _node.Update(k, o);
         }
 
-        public Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncClock(
+        public async Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncClock(
             NodeId p, Map<NodeId, UpdateIdSet> nodeClockP)
         {
-            // Thread.Sleep(_latency);
-            return Task.FromResult(_node.SyncClock(p, nodeClockP));
+            using (await _node.NodeLock.Enter(CancellationToken.None))
+                return _node.SyncClock(p, nodeClockP);
         }
     }
 }

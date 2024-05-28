@@ -1,7 +1,7 @@
 using Loopy.Data;
 using NUnit.Framework.Constraints;
 
-namespace Loopy.Test.LocalCluster;
+namespace Loopy.Test;
 
 internal static class Values
 {

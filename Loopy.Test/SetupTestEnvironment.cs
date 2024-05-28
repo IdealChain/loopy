@@ -10,14 +10,10 @@ public class SetupTestEnvironment
     [OneTimeSetUp]
     public void StartTest()
     {
-        // limit ThreadPool size to 1 to avoid tasks running in parallel
-        ThreadPool.SetMinThreads(1, 0);
-        ThreadPool.SetMaxThreads(1, 0);
-                
         // enable Trace logging to test output
         var console = new ConsoleTarget("console")
         {
-            Layout = new SimpleLayout { Text = @"${logger} ${scopenested} ${scopetiming:format=s\\.fff}: ${message}" }
+            Layout = new SimpleLayout { Text = @"${logger} ${scopenested}: ${message}" }
         };
         
         var config = new NLog.Config.LoggingConfiguration();

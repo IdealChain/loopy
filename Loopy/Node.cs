@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Loopy.Data;
+using Loopy.Enums;
 using Loopy.Interfaces;
 using NLog;
 using Object = Loopy.Data.Object;
@@ -27,9 +28,19 @@ public partial class Node : IClientApi
     }
 
     /// <summary>
+    /// Lock to limit concurrent access to node's data
+    /// </summary>
+    public readonly AwaitableLock NodeLock = new();
+
+    /// <summary>
     /// All dots from current and past versions seen by this node
     /// </summary>
     public readonly Map<NodeId, UpdateIdSet> NodeClock = new();
+
+    /// <summary>
+    /// Fifo version barrier (preceeding update id) up until priority
+    /// </summary>
+    public readonly Map<Priority, int> FifoClock = new();
 
     /// <summary>
     /// Maps dots of locally stored versions to keys -
@@ -96,6 +107,10 @@ public partial class Node : IClientApi
         // merged causal context: taking the maximum counter for common node ids
         o.CausalContext.MergeIn(o1.CausalContext);
         o.CausalContext.MergeIn(o2.CausalContext, (_, c1, c2) => Math.Max(c1, c2));
+        
+        // merged fifo barrier: increase to the maximum, common barrier 
+        o.FifoBarriers.MergeIn(o1.FifoBarriers);
+        o.FifoBarriers.MergeIn(o2.FifoBarriers, (_, c1, c2) => Math.Max(c1, c2));
 
         return o;
     }
@@ -105,10 +120,7 @@ public partial class Node : IClientApi
         var f = Fetch(k);
         var m = Merge(o, f);
         Store(k, m);
-        
         CheckFifo(k);
-        CheckCausal(k);
-        
         return m;
     }
 
@@ -117,7 +129,7 @@ public partial class Node : IClientApi
     /// </summary>
     private Object Strip(Object o, Map<NodeId, UpdateIdSet> nc)
     {
-        var s = new Object(o.DotValues, o.CausalContext);
+        var s = new Object(o.DotValues, o.CausalContext, o.FifoBarriers);
         foreach (var n in nc.Keys)
         {
             if (s.CausalContext[n] <= nc[n].Base)
@@ -132,7 +144,7 @@ public partial class Node : IClientApi
     /// </summary>
     private Object Fill(Key k, Object o, Map<NodeId, UpdateIdSet> nc)
     {
-        var f = new Object(o.DotValues, o.CausalContext);
+        var f = new Object(o.DotValues, o.CausalContext, o.FifoBarriers);
         foreach (var n in Context.GetReplicaNodes(k))
             f.CausalContext[n] = Math.Max(f.CausalContext[n], nc[n].Base);
 

@@ -19,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Loopy.Comm\Loopy.Comm.csproj" />
       <ProjectReference Include="..\Loopy\Loopy.csproj" />
     </ItemGroup>
 

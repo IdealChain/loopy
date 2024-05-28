@@ -1,4 +1,5 @@
 using Loopy.Data;
+using Loopy.Enums;
 using Loopy.Interfaces;
 
 namespace Loopy.Test.LocalCluster;
@@ -40,7 +41,7 @@ public class AntiEntropyTests
         }
 
         c.StartBackgroundTasks(.1, .1);
-        await Task.Delay(500);
+        await Task.Delay(1500);
         await c.StopBackgroundTasks();
 
         foreach (var n in c)

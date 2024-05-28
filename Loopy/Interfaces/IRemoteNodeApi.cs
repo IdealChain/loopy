@@ -1,4 +1,5 @@
 using Loopy.Data;
+using Loopy.Enums;
 using Object = Loopy.Data.Object;
 
 namespace Loopy.Interfaces;

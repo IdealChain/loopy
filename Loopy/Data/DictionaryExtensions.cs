@@ -33,9 +33,7 @@ public static class DictionaryExtensions
     {
         if (dict.Count == 0)
             return "-";
-        
-        return string.Join(", ", dict
-            .Select(kv => $"{kv.Key}={kv.Value}")
-            .OrderBy(v => v));
+
+        return string.Join(", ", dict.Select(kv => $"{kv.Key}={kv.Value}"));
     }
 }

@@ -1,5 +1,5 @@
 using Loopy.Data;
-using Loopy.Interfaces;
+using Loopy.Enums;
 using NLog;
 
 namespace Loopy;
@@ -27,7 +27,7 @@ public partial class Node
 
             // return merged result
             var m = objs.Aggregate(Merge);
-            Logger.Trace("returning [{Merged} - {Mode}]", m, mode);
+            Logger.Trace("returning [{Merged} - {Mode}]", m, mode);            
             return (m.DotValues.Values.ToArray(), m.CausalContext);
         }
     }
@@ -46,7 +46,13 @@ public partial class Node
             o.DotValues[(i, c)] = v;
             o.CausalContext.MergeIn(cc ?? CausalContext.Initial);
             o.CausalContext[i] = c;
-
+            
+            // include prior fifo clock as barriers and raise fifo clock
+            var keyPriority = k.Priority;
+            o.FifoBarriers.MergeIn(FifoClock);
+            for (var p = Priority.Bulk; p <= keyPriority; p++)
+                FifoClock[p] = c;
+                
             // update and merge local object
             o = Update(k, o);
 

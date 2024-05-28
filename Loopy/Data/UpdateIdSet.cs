@@ -8,6 +8,9 @@ namespace Loopy.Data;
 /// </summary>
 public class UpdateIdSet
 {
+    private int _base;
+    private SortedSet<int> _bitmap = new();
+
     public UpdateIdSet()
     {
     }
@@ -18,18 +21,18 @@ public class UpdateIdSet
         Normalize();
     }
 
-    private SortedSet<int> _bitmap = new();
+    public int Base => _base;
 
-    public int Base { get; private set; }
+    public IEnumerable<int> Bitmap => _bitmap;
 
-    public bool Contains(int updateId) => Base >= updateId || _bitmap.Contains(updateId);
+    public bool Contains(int updateId) => _base >= updateId || _bitmap.Contains(updateId);
 
     public IEnumerable<int> Except(UpdateIdSet other)
     {
         // other base less than our base => yield missing ids
-        if (other.Base < Base)
+        if (other._base < _base)
         {
-            foreach (var i in Enumerable.Range(other.Base + 1, Base - other.Base))
+            foreach (var i in Enumerable.Range(other._base + 1, _base - other._base))
                 yield return i;
         }
 
@@ -38,27 +41,27 @@ public class UpdateIdSet
             yield return i;
     }
 
-    public int Max => _bitmap.Count > 0 ? _bitmap.Max() : Base;
+    public int Max => _bitmap.Count > 0 ? _bitmap.Max() : _base;
 
-    public bool IsEmpty => Base == 0 && _bitmap.Count == 0;
+    public bool IsEmpty => _base == 0 && _bitmap.Count == 0;
 
     public void Add(int updateId)
     {
-        if (updateId > Base && _bitmap.Add(updateId))
+        if (updateId > _base && _bitmap.Add(updateId))
             Normalize();
     }
 
     public void UnionWith(UpdateIdSet other)
     {
-        Base = Math.Max(Base, other.Base);
+        _base = Math.Max(_base, other._base);
         _bitmap.UnionWith(other._bitmap);
         Normalize();
     }
 
     public void Normalize()
     {
-        while (_bitmap.Remove(Base + 1))
-            Base++;
+        while (_bitmap.Remove(_base + 1))
+            _base++;
     }
 
     public override string ToString()
@@ -67,7 +70,7 @@ public class UpdateIdSet
 
         if (!IsEmpty)
         {
-            sb.Append(Base);
+            sb.Append(_base);
             sb.Append("; ");
             sb.Append(_bitmap.Count == 0 ? "-" : string.Join(",", _bitmap));
         }

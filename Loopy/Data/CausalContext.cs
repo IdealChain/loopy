@@ -6,12 +6,10 @@ namespace Loopy.Data;
 public class CausalContext : Map<NodeId, int>
 {
     public CausalContext()
-    {
-    }
+    { }
 
-    public CausalContext(Map<NodeId, int> cc) : base(cc)
-    {
-    }
+    public CausalContext(IEnumerable<KeyValuePair<NodeId, int>> cc) : base(cc)
+    { }
 
     public static CausalContext Initial => new();
 
