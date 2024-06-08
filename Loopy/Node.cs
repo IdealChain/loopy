@@ -1,3 +1,4 @@
+using Loopy.Consistency;
 using System.Diagnostics;
 using Loopy.Data;
 using Loopy.Enums;
@@ -17,7 +18,7 @@ public partial class Node : IClientApi
     private NodeId i;
 
     public NodeId Id => i;
-    private ILogger Logger { get; }
+    public ILogger Logger { get; }
     private INodeContext Context { get; }
 
     public Node(NodeId id, INodeContext context)
@@ -25,6 +26,10 @@ public partial class Node : IClientApi
         i = id;
         Logger = LogManager.GetLogger(id.ToString());
         Context = context;
+
+        ConsistencyStores[ConsistencyMode.Eventual] = new EventualStore(this);
+        ConsistencyStores[ConsistencyMode.Fifo] = new FifoStore(this);
+        ConsistencyStores[ConsistencyMode.Causal] = new CausalStore(this);
     }
 
     /// <summary>
@@ -35,38 +40,42 @@ public partial class Node : IClientApi
     /// <summary>
     /// All dots from current and past versions seen by this node
     /// </summary>
-    public readonly Map<NodeId, UpdateIdSet> NodeClock = new();
+    internal readonly Map<NodeId, UpdateIdSet> NodeClock = new();
 
     /// <summary>
     /// Fifo version barrier (preceeding update id) up until priority
     /// </summary>
-    public readonly Map<Priority, int> FifoClock = new();
+    internal readonly Map<Priority, int> FifoPredecessorClock = new();
 
     /// <summary>
     /// Maps dots of locally stored versions to keys -
     /// entries are removed when dots are known by every peer node
     /// </summary>
-    public readonly Map<Dot, Key> DotKeyMap = new();
+    internal readonly Map<Dot, Key> DotKeyMap = new();
 
     /// <summary>
     /// A cache of node clocks from every peer, including itself -
     /// in practice, only the base counter of every entry is saved
     /// </summary>
-    public readonly Map<NodeId, Map<NodeId, int>> Watermark = new();
+    internal readonly Map<NodeId, Map<NodeId, int>> Watermark = new();
 
     /// <summary>
     /// The keys of local objects with a non-empty causal context
     /// </summary>
-    public readonly HashSet<Key> NonStrippedKeys = new();
+    internal readonly HashSet<Key> NonStrippedKeys = new();
 
     /// <summary>
     /// Maps keys to objects
     /// </summary>
-    public readonly Map<Key, Object> Storage = new();
+    internal readonly Map<Key, Object> Storage = new();
 
-    public Object Fetch(Key k)
+    private readonly Dictionary<ConsistencyMode, IConsistencyStore> ConsistencyStores = new();
+
+    public Object Fetch(Key k, ConsistencyMode mode = ConsistencyMode.Eventual)
     {
-        return Fill(k, Storage[k], NodeClock);
+        var modePart = (ConsistencyMode)((int)mode & 0x0F);
+        var prioPart = (Priority)(((int)mode & 0xF0) >> 4);
+        return ConsistencyStores[modePart].Fetch(k, prioPart);
     }
 
     private void Store(Key k, Object o)
@@ -93,8 +102,8 @@ public partial class Node : IClientApi
         else
             NonStrippedKeys.Add(k);
     }
-    
-    private static Object Merge(Object o1, Object o2)
+
+    internal static Object Merge(Object o1, Object o2)
     {
         var o = new Object();
 
@@ -104,13 +113,14 @@ public partial class Node : IClientApi
         o.DotValues.MergeIn(o1.DotValues.Where(p => !o2.CausalContext.Contains(p.Key)));
         o.DotValues.MergeIn(o2.DotValues.Where(p => !o1.CausalContext.Contains(p.Key)));
 
+        // same for fifo distances
+        o.FifoDistances.MergeIn(o1.FifoDistances.IntersectBy(o2.FifoDistances.Keys, p => p.Key));
+        o.FifoDistances.MergeIn(o1.FifoDistances.Where(p => !o2.CausalContext.Contains(p.Key)));
+        o.FifoDistances.MergeIn(o2.FifoDistances.Where(p => !o1.CausalContext.Contains(p.Key)));
+
         // merged causal context: taking the maximum counter for common node ids
         o.CausalContext.MergeIn(o1.CausalContext);
         o.CausalContext.MergeIn(o2.CausalContext, (_, c1, c2) => Math.Max(c1, c2));
-        
-        // merged fifo barrier: increase to the maximum, common barrier 
-        o.FifoBarriers.MergeIn(o1.FifoBarriers);
-        o.FifoBarriers.MergeIn(o2.FifoBarriers, (_, c1, c2) => Math.Max(c1, c2));
 
         return o;
     }
@@ -120,16 +130,20 @@ public partial class Node : IClientApi
         var f = Fetch(k);
         var m = Merge(o, f);
         Store(k, m);
-        CheckFifo(k);
+
+        // notify all consistency stores
+        foreach (var cs in ConsistencyStores.Values)
+            cs.CheckMerge(k, m);
+
         return m;
     }
 
     /// <summary>
     /// Removes per-key causal context that is already covered by the given node clock 
     /// </summary>
-    private Object Strip(Object o, Map<NodeId, UpdateIdSet> nc)
+    internal Object Strip(Object o, Map<NodeId, UpdateIdSet> nc)
     {
-        var s = new Object(o.DotValues, o.CausalContext, o.FifoBarriers);
+        var s = new Object(o.DotValues, o.CausalContext, o.FifoDistances);
         foreach (var n in nc.Keys)
         {
             if (s.CausalContext[n] <= nc[n].Base)
@@ -142,9 +156,9 @@ public partial class Node : IClientApi
     /// <summary>
     /// Fills back per-key causal context from the given node clock
     /// </summary>
-    private Object Fill(Key k, Object o, Map<NodeId, UpdateIdSet> nc)
+    internal Object Fill(Key k, Object o, Map<NodeId, UpdateIdSet> nc)
     {
-        var f = new Object(o.DotValues, o.CausalContext, o.FifoBarriers);
+        var f = new Object(o.DotValues, o.CausalContext, o.FifoDistances);
         foreach (var n in Context.GetReplicaNodes(k))
             f.CausalContext[n] = Math.Max(f.CausalContext[n], nc[n].Base);
 

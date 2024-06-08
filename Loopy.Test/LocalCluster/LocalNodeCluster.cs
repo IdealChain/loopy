@@ -72,23 +72,8 @@ public class LocalNodeCluster : IEnumerable<NodeId>, INodeContext
 
         public async Task<Object> Fetch(Key k, ConsistencyMode mode)
         {
-            var modePart = (ConsistencyMode)((int)mode & 0x0F);
-            var prioPart = (Priority)(((int)mode & 0xF0) >> 4);
-
             using (await _node.NodeLock.Enter(CancellationToken.None))
-            {
-                switch (modePart)
-                {
-                    case ConsistencyMode.Eventual:
-                        return _node.Fetch(k);
-                    case ConsistencyMode.Fifo:
-                        return _node.FetchFifo(k, prioPart);
-                    case ConsistencyMode.Causal:
-                        return _node.FetchCausal(k);
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(mode));
-                }
-            }
+                return _node.Fetch(k, mode);
         }
 
         public async Task<Object> Update(Key k, Object o)

@@ -36,6 +36,7 @@ public partial class Node
     {
         using (ScopeContext.PushNestedState($"Put({k}, {v})"))
         {
+            var keyPriority = k.Priority;
             var replicaNodes = Context.GetReplicaNodes(k)
                 .Where(n => n != i)
                 .Select(Context.GetNodeApi);
@@ -44,14 +45,13 @@ public partial class Node
             var c = NodeClock[i].Max + 1;
             var o = new Data.Object();
             o.DotValues[(i, c)] = v;
+            o.FifoDistances[(i, c)] = new FifoDistances(FifoPredecessorClock);
             o.CausalContext.MergeIn(cc ?? CausalContext.Initial);
             o.CausalContext[i] = c;
             
-            // include prior fifo clock as barriers and raise fifo clock
-            var keyPriority = k.Priority;
-            o.FifoBarriers.MergeIn(FifoClock);
+            // raise fifo predecessor for all lower-or-equal priorities
             for (var p = Priority.Bulk; p <= keyPriority; p++)
-                FifoClock[p] = c;
+                FifoPredecessorClock[p] = c;
                 
             // update and merge local object
             o = Update(k, o);

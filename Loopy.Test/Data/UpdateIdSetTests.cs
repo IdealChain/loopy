@@ -57,15 +57,20 @@ public class UpdateIdSetTests
         var s2 = new UpdateIdSet(1, 2);
         Assert.That(s1.Except(s2), Is.EquivalentTo(new[] { 3, 4 }));
         Assert.That(s2.Except(s1), Is.Empty);
-
+        
         var s3 = new UpdateIdSet(4, 7, 9);
         var s4 = new UpdateIdSet(7, 8, 9);
         Assert.That(s3.Except(s4), Is.EquivalentTo(new[] { 4 }));
         Assert.That(s4.Except(s3), Is.EquivalentTo(new[] { 8 }));
-
+        
         var s5 = new UpdateIdSet(1, 2, 3, 7, 8);
         var s6 = new UpdateIdSet(1, 2, 3, 4, 10, 12);
         Assert.That(s5.Except(s6), Is.EquivalentTo(new[] { 7, 8 }));
         Assert.That(s6.Except(s5), Is.EquivalentTo(new[] { 4, 10, 12 }));
+
+        var s7 = new UpdateIdSet(1, 2, 4);
+        var s8 = new UpdateIdSet(1, 2, 3, 4);
+        Assert.That(s7.Except(s8), Is.Empty);
+        Assert.That(s8.Except(s7), Is.EquivalentTo(new[] { 3 }));
     }
 }

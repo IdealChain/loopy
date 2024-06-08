@@ -14,16 +14,15 @@ public class Object
     {
     }
 
-    public Object(DotValues? vers, CausalContext? cc, FifoBarriers? fb)
+    public Object(DotValues? vers, CausalContext? cc, Map<Dot, FifoDistances>? fd)
     {
         DotValues = vers != null ? new(vers) : new();
         CausalContext = cc != null ? new(cc) : new();
-        FifoBarriers = fb != null ? new(fb) : new();
+        FifoDistances = fd != null ? new(fd) : new();
     }
 
     public DotValues DotValues { get; init; }
     public CausalContext CausalContext { get; init; }
-    public FifoBarriers FifoBarriers { get; init; } // TODO: per dot
-
-    public override string ToString() => $"{DotValues} / CC: {CausalContext} / FB: {FifoBarriers}";
+    public Map<Dot, FifoDistances> FifoDistances { get; init; } 
+    public override string ToString() => $"{DotValues} / CC: {CausalContext} / FD: {FifoDistances.ValuesToString()}";
 }

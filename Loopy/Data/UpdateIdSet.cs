@@ -25,7 +25,7 @@ public class UpdateIdSet
 
     public IEnumerable<int> Bitmap => _bitmap;
 
-    public bool Contains(int updateId) => _base >= updateId || _bitmap.Contains(updateId);
+    public bool Contains(int updateId) => updateId <= _base || _bitmap.Contains(updateId);
 
     public IEnumerable<int> Except(UpdateIdSet other)
     {
@@ -33,11 +33,12 @@ public class UpdateIdSet
         if (other._base < _base)
         {
             foreach (var i in Enumerable.Range(other._base + 1, _base - other._base))
-                yield return i;
+                if (!other.Contains(i))
+                    yield return i;
         }
 
         // plus the difference in the bitmap set
-        foreach (var i in _bitmap.Where(j => !other._bitmap.Contains(j)))
+        foreach (var i in _bitmap.Where(j => !other.Contains(j)))
             yield return i;
     }
 
@@ -55,6 +56,7 @@ public class UpdateIdSet
     {
         _base = Math.Max(_base, other._base);
         _bitmap.UnionWith(other._bitmap);
+        _bitmap.RemoveWhere(updateId => updateId <= _base);
         Normalize();
     }
 

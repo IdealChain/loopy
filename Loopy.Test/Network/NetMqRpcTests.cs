@@ -9,7 +9,7 @@ namespace Loopy.Test.Network;
 public class NetMqRpcTests
 {
     [Test]
-    public Task TestClientApiAsync()
+    public void TestClientApiAsync()
     {
         var cluster = new LocalNodeCluster(1);
         var api = cluster.GetClientApi(1);
@@ -35,12 +35,10 @@ public class NetMqRpcTests
         }
 
         runtime.Run(cts.Token, server.HandleRequests(cts.Token), PutGetTask());
-
-        return Task.CompletedTask;
     }
 
     [Test]
-    public Task TestNodeApiAsync()
+    public void TestNodeApiAsync()
     {
         var cluster = new LocalNodeCluster(1);
         var api = cluster.GetNodeApi(1);
@@ -58,8 +56,8 @@ public class NetMqRpcTests
                     new Loopy.Data.Object
                     {
                         DotValues = new() { { new Dot(1, 1), "value" } },
+                        FifoDistances = new() { { new Dot(1, 1), new FifoDistances() } },
                         CausalContext = new() { { 1, 1 } },
-                        FifoBarriers = new() { { Priority.Bulk, 0 } },
                     });
                 Assert.That(updateResult.DotValues.Values, Does.Contain((Value)"value"));
 
@@ -74,7 +72,5 @@ public class NetMqRpcTests
         }
 
         runtime.Run(cts.Token, server.HandleRequests(cts.Token), UpdateFetchTask());
-
-        return Task.CompletedTask;
     }
 }

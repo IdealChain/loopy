@@ -28,8 +28,8 @@ public class MessageSerializerTests
                 Obj = new ObjectMsg
                 {
                     DotValues = new() { (0, 0, "value") },
+                    FifoDistances = new() { (0, 0, new FifoDistancesMsg()) },
                     CausalContext = new() { CausalContext = new() { (0, 0) } },
-                    FifoBarriers = new() { (1, 2) },
                 }
             };
         }

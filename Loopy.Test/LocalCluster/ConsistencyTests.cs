@@ -1,6 +1,5 @@
 using Loopy.Data;
 using Loopy.Enums;
-using Loopy.Interfaces;
 
 namespace Loopy.Test.LocalCluster;
 
@@ -30,20 +29,23 @@ public class ConsistencyTests
         
         var n1A = await n1.Get(a);
         var n1B = await n1.Get(b);
-        Assert.That(n1A.values.Concat(n1B.values), Values.EquivalentTo(v1, v2));
+        Assert.That(n1A.values, Values.EqualTo(v1));
+        Assert.That(n1B.values, Values.EqualTo(v2));
 
         // FIFO consistency: we expect to see a=1 BEFORE b=2, never after
         // N2: before anti-entropy, we expect the initial values a=0, b=0
         var n2A = await n2.Get(a, mode: ConsistencyMode.Fifo);
         var n2B = await n2.Get(b, mode: ConsistencyMode.Fifo);
-        Assert.That(n2A.values.Concat(n2B.values), Values.EquivalentTo(v0, v0));
+        Assert.That(n2A.values, Values.EqualTo(v0));
+        Assert.That(n2B.values, Values.EqualTo(v0));
 
         await c.RunBackgroundTasksOnce();
 
         // N2: after anti-entropy, we expect the latest values a=1, b=2
         n2A = await n2.Get(a, mode: ConsistencyMode.Fifo);
         n2B = await n2.Get(b, mode: ConsistencyMode.Fifo);
-        Assert.That(n2A.values.Concat(n2B.values), Values.EquivalentTo(v1, v2));
+        Assert.That(n2A.values, Values.EqualTo(v1));
+        Assert.That(n2B.values, Values.EqualTo(v2));
     }
 
     [Test]
@@ -61,21 +63,24 @@ public class ConsistencyTests
         await n1.Delete(a, mode: ReplicationMode.None);
         await n1.Delete(b, mode: ReplicationMode.Sync);
         var n1A = await n1.Get(a);
-        var n1B = await n2.Get(b);
-        Assert.That(n1A.values.Concat(n1B.values), Values.EquivalentTo(Value.None, Value.None));
+        var n1B = await n1.Get(b);
+        Assert.That(n1A.values, Values.EqualTo(Value.None));
+        Assert.That(n1B.values, Values.EqualTo(Value.None));
         
         // FIFO consistency: we expect to see a=- BEFORE b=-, never after
         // N2: before anti-entropy, we expect the initial values a=0, b=0
         var n2A = await n2.Get(a, mode: ConsistencyMode.Fifo);
         var n2B = await n2.Get(b, mode: ConsistencyMode.Fifo);
-        Assert.That(n2A.values.Concat(n2B.values), Values.EquivalentTo(v0, v0));
+        Assert.That(n2A.values, Values.EqualTo(v0));
+        Assert.That(n2B.values, Values.EqualTo(v0));
         
         await c.RunBackgroundTasksOnce();
         
         // N2: after anti-entropy, we expect the latest values a=-, b=-
         n2A = await n2.Get(a, mode: ConsistencyMode.Fifo);
         n2B = await n2.Get(b, mode: ConsistencyMode.Fifo);
-        Assert.That(n2A.values.Concat(n2B.values), Is.Empty);
+        Assert.That(n2A.values, Is.Empty);
+        Assert.That(n2B.values, Is.Empty);
     }
 
     private readonly Key x = "P0_x";
@@ -109,24 +114,32 @@ public class ConsistencyTests
         Assert.That(n2Y.values, Values.EqualTo(v0));
         Assert.That(n2Z.values, Values.EqualTo(v0));
 
-        // But with priority:
+        // But with high priority:
         // - we should see high prio y=2, since it DID arrive
-        // - low-prio x=1 should block only z=3, NOT high prio y=2
+        // - we should not see anything of low-prio x, z
         n2X = await n2.Get(x, mode: ConsistencyMode.FifoHigh);
         n2Y = await n2.Get(y, mode: ConsistencyMode.FifoHigh);
         n2Z = await n2.Get(z, mode: ConsistencyMode.FifoHigh);
-        Assert.That(n2X.values, Values.EqualTo(v0));
+        Assert.That(n2X.values, Is.Empty);
         Assert.That(n2Y.values, Values.EqualTo(v2));
-        Assert.That(n2Z.values, Values.EqualTo(v0));
+        Assert.That(n2Z.values, Is.Empty);
 
         await c.RunBackgroundTasksOnce();
 
-        // N2: after anti-entropy, we expect the latest values x=1, y=2, z=3
+        // Basic FIFO: after anti-entropy, we expect the latest values x=1, y=2, z=3
         n2X = await n2.Get(x, mode: ConsistencyMode.Fifo);
         n2Y = await n2.Get(y, mode: ConsistencyMode.Fifo);
         n2Z = await n2.Get(z, mode: ConsistencyMode.Fifo);
         Assert.That(n2X.values, Values.EqualTo(v1));
         Assert.That(n2Y.values, Values.EqualTo(v2));
         Assert.That(n2Z.values, Values.EqualTo(v3));
+        
+        // High prio results should not have changed
+        n2X = await n2.Get(x, mode: ConsistencyMode.FifoHigh);
+        n2Y = await n2.Get(y, mode: ConsistencyMode.FifoHigh);
+        n2Z = await n2.Get(z, mode: ConsistencyMode.FifoHigh);
+        Assert.That(n2X.values, Is.Empty);
+        Assert.That(n2Y.values, Values.EqualTo(v2));
+        Assert.That(n2Z.values, Is.Empty);
     }
 }
