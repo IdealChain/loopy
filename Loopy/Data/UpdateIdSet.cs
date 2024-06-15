@@ -17,8 +17,7 @@ public class UpdateIdSet
 
     public UpdateIdSet(params int[] ids)
     {
-        _bitmap = new(ids);
-        Normalize();
+        UnionWith(ids);
     }
 
     public int Base => _base;
@@ -48,7 +47,7 @@ public class UpdateIdSet
 
     public void Add(int updateId)
     {
-        if (updateId > _base && _bitmap.Add(updateId))
+        if (updateId > Base && _bitmap.Add(updateId))
             Normalize();
     }
 
@@ -56,12 +55,22 @@ public class UpdateIdSet
     {
         _base = Math.Max(_base, other._base);
         _bitmap.UnionWith(other._bitmap);
-        _bitmap.RemoveWhere(updateId => updateId <= _base);
         Normalize();
     }
 
-    public void Normalize()
+    public void UnionWith(IEnumerable<int> other)
     {
+        _bitmap.UnionWith(other);
+        Normalize();
+    }
+
+    private void Normalize()
+    {
+        // remove bitmap values already covered by base
+        while (_bitmap.Count > 0 && _bitmap.Min <= _base)
+            _bitmap.Remove(_bitmap.Min);
+        
+        // advance base value as far as possible
         while (_bitmap.Remove(_base + 1))
             _base++;
     }

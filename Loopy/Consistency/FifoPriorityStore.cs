@@ -25,24 +25,22 @@ internal class FifoPriorityStore : IConsistencyStore
         // if the key's priority is below our level, it is filtered and must be ignored
         if (k.Priority < _prio)
             return;
+        
 
         using (ScopeContext.PushNestedState($"MergeFifo({k}, {_prio})"))
         {
-            // special handling for anti-entropy synced deletion: apply immediately without adhering to FIFO order
-            // (as the dot values are already received empty, we do not know node/update ID of the operation)
-            // if (o.DotValues.Count == 0)
-            if (o.DotValues.Values.All(v => v.IsEmpty) && o.CausalContext.Count == 0)
+            // special handling for anti-entropy synced deletion: ignore empty object
+            // (as the dot values are already received empty, we do not know node/update ID of the delete operation)
+            if (o.DotValues.Count == 0)
             {
-                _node.Logger.Trace("Applying deletion");
-                Store(k, o);
-                CheckPending(_pending.Keys.ToList());
+                _node.Logger.Trace("ignoring empty object [deletion]");
                 return;
             }
 
             // group dots into immediately applicable (no gaps) and pending (gaps) sets, ignoring already applied ones
             var applicableDots = o.DotValues.Keys
                 .Where(d => !_fifoClock[d.NodeId].Contains(d.UpdateId))
-                .ToLookup(d => _fifoClock[d.NodeId].Base >= o.FifoDistances[d][_prio]);
+                .ToLookup(d => _fifoClock[d.NodeId].Base >= o.FifoDistances[d].GetPredecessorId(_prio, d.UpdateId));
 
             // short circuit the common case of no gaps: we can apply immediately, just as in the eventual store
             if (!applicableDots[false].Any())
@@ -89,7 +87,7 @@ internal class FifoPriorityStore : IConsistencyStore
             foreach (var (u, (k, o)) in p)
             {
                 var d = new Dot(n, u);
-                if (_fifoClock[d.NodeId].Base >= o.FifoDistances[d][_prio])
+                if (_fifoClock[d.NodeId].Base >= o.FifoDistances[d].GetPredecessorId(_prio, u))
                 {
                     _node.Logger.Trace("Merging [no fifo gap]: {Dot}={Value}", d, o.DotValues[d]);
                     Store(k, o);
@@ -110,7 +108,10 @@ internal class FifoPriorityStore : IConsistencyStore
 
     public Object Fetch(Key k, Priority p = default)
     {
-        return _node.Fill(k, _fifoStorage[k], _fifoClock);
+        if (!_fifoStorage.TryGetValue(k, out var obj) || obj.IsEmpty)
+            obj = new Object();
+        
+        return _node.Fill(k, obj, _fifoClock);
     }
 
     private void Store(Key k, Object f)
@@ -119,15 +120,61 @@ internal class FifoPriorityStore : IConsistencyStore
         var s = _node.Strip(m, _fifoClock);
         var (vers, cc, fd) = (s.DotValues, s.CausalContext, s.FifoDistances);
 
-        if (vers.Values.All(v => v.IsEmpty) && cc.Count == 0)
+        if (s.IsEmpty && cc.Count == 0)
             _fifoStorage.Remove(k);
         else
             _fifoStorage[k] = s;
 
         foreach (var d in vers.Keys)
         {
-            for (int i = fd[d][_prio] + 1; i <= d.UpdateId; i++)
-                _fifoClock[d.NodeId].Add(i);
+            _fifoClock[d.NodeId].UnionWith(fd[d].GetSkippedUpdateIds(_prio, d.UpdateId));
+            _fifoClock[d.NodeId].Add(d.UpdateId);
+        }
+    }
+
+    public Map<NodeId, UpdateIdSet> GetClock() => _fifoClock;
+
+    public (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects) SyncClock(
+        NodeId p, Map<NodeId, UpdateIdSet> pNodeClock)
+    {
+        using (ScopeContext.PushNestedState($"SyncFifoClock({p}, {_prio})"))
+        {
+            _node.Logger.Trace("syncing: {NC}", pNodeClock.ValuesToString());
+
+            // get all keys from dots missing in the node p
+            var missingKeys = new HashSet<Key>();
+            foreach (var n in _node.Context.GetPeerNodes(_node.Id).Intersect(_node.Context.GetPeerNodes(p)))
+            foreach (var c in _fifoClock[n].Except(pNodeClock[n]))
+                missingKeys.Add(_node.DotKeyMap[(n, c)]);
+
+            // get the missing objects from keys replicated by p
+            var missingKeyObjects = new List<(Key, Object)>();
+            foreach (var k in missingKeys)
+            {
+                if (_node.Context.GetReplicaNodes(k).Contains(p))
+                    missingKeyObjects.Add((k, _fifoStorage[k]));
+            }
+
+            // remote sync_repair => return results instead of RPC
+            _node.Logger.Trace("returning: {Missing} missing objects for {N}", missingKeyObjects.Count, p);
+            return (_fifoClock, missingKeyObjects);
+        }
+    }
+
+    public void SyncRepair(NodeId p, Map<NodeId, UpdateIdSet> pNodeClock, List<(Key, Object)> missingObjects)
+    {
+        using (ScopeContext.PushNestedState($"SyncFifoRepair({p}, {_prio})"))
+        {
+            _node.Logger.Trace("applying {NC}: {Missing} objects", pNodeClock.ValuesToString(), missingObjects.Count);
+
+            // update local objects with the missing objects [trust that its FIFO]
+            foreach (var (k, o) in missingObjects)
+                Store(k, o);
+
+            // merge p's node clock entry to close gaps
+            _fifoClock[p].UnionWith(pNodeClock[p]);
+
+            CheckPending([p]);
         }
     }
 }

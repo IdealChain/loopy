@@ -9,7 +9,7 @@ public class DotValues : Map<Dot, Value>
     {
     }
 
-    public DotValues(IEnumerable<KeyValuePair<Dot, Value>> dict) : base(dict)
+    public DotValues(IEnumerable<KeyValuePair<Dot, Value>> dists) : base(dists)
     {
     }
 

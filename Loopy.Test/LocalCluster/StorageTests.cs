@@ -1,5 +1,6 @@
 using Loopy.Data;
 using Loopy.Interfaces;
+using ProtoBuf;
 
 namespace Loopy.Test.LocalCluster;
 
@@ -18,10 +19,17 @@ public class StorageTests
         await n1.Put("a", "value", r1.cc);
 
         var r2 = await n1.Get("a");
-        Assert.That(r2.values, Is.EquivalentTo(new Value[] { "value" }));
+        Assert.That(r2.values, Values.EquivalentTo("value"));
 
         var r3 = await n2.Get("a");
-        Assert.That(r3.values, Is.EquivalentTo(new Value[] { "value" }));
+        Assert.That(r3.values, Values.EquivalentTo("value"));
+
+        await n1.Delete("a", r2.cc);
+        var r4 = await n1.Get("a");
+        Assert.That(r4.values, Values.Empty());
+
+        var r5 = await n2.Get("b");
+        Assert.That(r5.values, Values.Empty());
     }
 
     [Test]
@@ -39,8 +47,8 @@ public class StorageTests
         var r2 = await n2.Get("a", 2);
         Assert.Multiple(() =>
         {
-            Assert.That(r1.values, Is.EquivalentTo(new Value[] { 1, 2 }));
-            Assert.That(r2.values, Is.EquivalentTo(new Value[] { 1, 2 }));
+            Assert.That(r1.values, Values.EquivalentTo(1, 2));
+            Assert.That(r2.values, Values.EquivalentTo(1, 2));
         });
 
         // seen it, now resolve conflict with 3
@@ -49,8 +57,8 @@ public class StorageTests
         r2 = await n2.Get("a", 1);
         Assert.Multiple(() =>
         {
-            Assert.That(r1.values, Is.EquivalentTo(new Value[] { 3 }));
-            Assert.That(r2.values, Is.EquivalentTo(new Value[] { 3 }));
+            Assert.That(r1.values, Values.EquivalentTo(3));
+            Assert.That(r2.values, Values.EquivalentTo(3));
         });
         
         // put new value without context
@@ -59,8 +67,8 @@ public class StorageTests
         r2 = await n2.Get("a", 1);
         Assert.Multiple(() =>
         {
-            Assert.That(r1.values, Is.EquivalentTo(new Value[] { 4 }));
-            Assert.That(r2.values, Is.EquivalentTo(new Value[] { 4 }));
+            Assert.That(r1.values, Values.EquivalentTo(4));
+            Assert.That(r2.values, Values.EquivalentTo(4));
         });
     }
 }

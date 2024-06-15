@@ -27,7 +27,7 @@ public partial class Node
 
             // return merged result
             var m = objs.Aggregate(Merge);
-            Logger.Trace("returning [{Merged} - {Mode}]", m, mode);            
+            Logger.Trace("returning [{Merged} - {Mode}]", m, mode);
             return (m.DotValues.Values.ToArray(), m.CausalContext);
         }
     }
@@ -45,14 +45,14 @@ public partial class Node
             var c = NodeClock[i].Max + 1;
             var o = new Data.Object();
             o.DotValues[(i, c)] = v;
-            o.FifoDistances[(i, c)] = new FifoDistances(FifoPredecessorClock);
+            o.FifoDistances[(i, c)] = new FifoDistances(FifoPriorityPredecessor, c);
             o.CausalContext.MergeIn(cc ?? CausalContext.Initial);
             o.CausalContext[i] = c;
             
             // raise fifo predecessor for all lower-or-equal priorities
-            for (var p = Priority.Bulk; p <= keyPriority; p++)
-                FifoPredecessorClock[p] = c;
-                
+            for (var p = Priority.P0; p <= keyPriority; p++)
+                FifoPriorityPredecessor[p] = c;
+            
             // update and merge local object
             o = Update(k, o);
 

@@ -18,15 +18,15 @@ public class AntiEntropyTests
         await n2.Put("b", 7, CausalContext.Initial, ReplicationMode.None);
 
         var (r1, _) = await n2.Get("a");
-        Assert.That(r1, Is.Empty);
+        Assert.That(r1, Values.Empty());
 
         await c.RunBackgroundTasksOnce();
 
         var (r2, _) = await n2.Get("a");
-        Assert.That(r2, Is.EquivalentTo(new Value[] { 2 }));
+        Assert.That(r2, Values.EquivalentTo(2));
 
         var (r3, _) = await n1.Get("b");
-        Assert.That(r3, Is.EquivalentTo(new Value[] { 7 }));
+        Assert.That(r3, Values.EquivalentTo(7));
     }
 
     [Test]
@@ -41,7 +41,7 @@ public class AntiEntropyTests
         }
 
         c.StartBackgroundTasks(.1, .1);
-        await Task.Delay(1500);
+        await Task.Delay(2000);
         await c.StopBackgroundTasks();
 
         foreach (var n in c)
@@ -50,13 +50,13 @@ public class AntiEntropyTests
             
             // key should conflict 1-4
             var (rKey, _) = await api.Get("key");
-            Assert.That(rKey, Is.EquivalentTo(new Value[] { 1, 2, 3, 4 }));
+            Assert.That(rKey, Values.EquivalentTo(1, 2, 3, 4));
 
             // all node IDs should have propagated
             foreach (var m in c)
             {
                 var (rM, _) = await api.Get(m.ToString());
-                Assert.That(rM, Is.EquivalentTo(new Value[] { m.Id }));
+                Assert.That(rM, Values.EquivalentTo(m.Id));
             }
         }
     }

@@ -23,11 +23,18 @@ public class FifoStore : IConsistencyStore
             priorityStore.CheckMerge(k, o);
     }
 
-    public Object Fetch(Key k, Priority p = default)
-    {
-        if (!_priorityStores.TryGetValue(p, out var priorityStore))
-            return new Object();
+    public Object Fetch(Key k, Priority p = default) => _priorityStores[p].Fetch(k);
 
-        return priorityStore.Fetch(k);
+    public Map<NodeId, UpdateIdSet> GetClock(Priority prio) => _priorityStores[prio].GetClock();
+
+    public (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects) SyncClock(
+        NodeId p, Priority prio, Map<NodeId, UpdateIdSet> pNodeClock)
+    {
+        return _priorityStores[prio].SyncClock(p, pNodeClock);
+    }
+
+    public void SyncRepair(NodeId p, Priority prio, Map<NodeId, UpdateIdSet> pNodeClock, List<(Key, Object)> missingObjects)
+    {
+        _priorityStores[prio].SyncRepair(p, pNodeClock, missingObjects);
     }
 }

@@ -1,4 +1,6 @@
+using Loopy.Consistency;
 using Loopy.Data;
+using Loopy.Enums;
 using NLog;
 using Object = Loopy.Data.Object;
 
@@ -27,17 +29,32 @@ public partial class Node
         // random peer choice from all peers except oneself
         var rand = new Random(i.Id);
         var peerNodes = Context.GetPeerNodes(i).Where(j => j != i).ToArray();
+        var prios = Enum.GetValues<Priority>().ToArray();
 
         while (!cancellationToken.IsCancellationRequested)
         {
             using (ScopeContext.PushNestedState($"AntiEntropy"))
             {
                 var p = peerNodes[rand.Next(peerNodes.Length)];
+                var nodeApi = Context.GetNodeApi(p);
+
                 Logger.Trace("syncing with {Node}...", p);
-                var (pNodeClock, pMissingObjects) = await Context.GetNodeApi(p).SyncClock(i, NodeClock);
-                
+                var (pNodeClock, pMissingObjects) = await nodeApi.SyncClock(i, NodeClock);
+
+                // also fetch missing Fifo objects
+                var d = new Map<Priority, (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)>();
+                var fifoStore = (FifoStore)ConsistencyStores[ConsistencyMode.Fifo];
+                foreach (var prio in prios)
+                    d[prio] = await nodeApi.SyncFifoClock(i, prio, fifoStore.GetClock(prio));
+
                 using (await NodeLock.Enter(cancellationToken))
+                {
                     SyncRepair(p, pNodeClock, pMissingObjects);
+
+                    // also repair Fifo stores
+                    foreach (var prio in prios)
+                        fifoStore.SyncRepair(p, prio, d[prio].NodeClock, d[prio].missingObjects);
+                }
             }
 
             await Task.Delay(syncInterval, cancellationToken).ContinueWith(_ => { });
@@ -98,5 +115,12 @@ public partial class Node
                     DotKeyMap.Remove((n, c));
             }
         }
+    }
+    
+    public (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects) SyncFifoClock(
+        NodeId p, Priority prio, Map<NodeId, UpdateIdSet> pNodeClock)
+    {
+        var fifoStore = (FifoStore)ConsistencyStores[ConsistencyMode.Fifo];
+        return fifoStore.SyncClock(p, prio, pNodeClock);
     }
 }

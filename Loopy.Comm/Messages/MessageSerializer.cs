@@ -38,7 +38,7 @@ namespace Loopy.Comm.Messages
 
         public static void Serialize(NetMQMessage target, IMessage msg)
         {
-            Debug.Assert(target.IsEmpty);
+            Trace.Assert(target.IsEmpty);
             if (!MessageIds.TryGetValue(msg.GetType(), out var id))
                 throw new InvalidOperationException($"Unknown msg type {msg.GetType()}");
 

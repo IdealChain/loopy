@@ -13,8 +13,8 @@ public class Map<TKey, TValue> : Dictionary<TKey, TValue>
     {
     }
 
-    public Map(IEnumerable<KeyValuePair<TKey, TValue>>? dict)
-        : base(dict ?? Enumerable.Empty<KeyValuePair<TKey, TValue>>())
+    public Map(IEnumerable<KeyValuePair<TKey, TValue>>? dists)
+        : base(dists ?? Enumerable.Empty<KeyValuePair<TKey, TValue>>())
     {
     }
     

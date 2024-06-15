@@ -20,8 +20,6 @@ public class CausalStore : IConsistencyStore
 
     public void CheckMerge(Key k, Object o)
     {
-        return;
-        
         DirtyKeys.Add(k);
         Merge();
     }

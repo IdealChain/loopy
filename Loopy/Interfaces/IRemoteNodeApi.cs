@@ -20,8 +20,14 @@ public interface IRemoteNodeApi
     Task<Object> Update(Key k, Object o);
 
     /// <summary>
-    /// Syncs the passed node clock with the own one and returns missing objects 
+    /// Syncs the passed node clock with the own one and returns missing objects
     /// </summary>
     Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncClock(
         NodeId p, Map<NodeId, UpdateIdSet> nodeClockP);
+    
+    /// <summary>
+    /// Syncs the passed node clock with the own one and returns missing objects (FIFO edition)
+    /// </summary>
+    Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncFifoClock(
+        NodeId p, Priority prio, Map<NodeId, UpdateIdSet> nodeClockP);
 }

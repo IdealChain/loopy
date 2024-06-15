@@ -23,6 +23,7 @@ public class Object
 
     public DotValues DotValues { get; init; }
     public CausalContext CausalContext { get; init; }
-    public Map<Dot, FifoDistances> FifoDistances { get; init; } 
+    public Map<Dot, FifoDistances> FifoDistances { get; init; }
+    public bool IsEmpty => DotValues.All(kv => kv.Value.IsEmpty);
     public override string ToString() => $"{DotValues} / CC: {CausalContext} / FD: {FifoDistances.ValuesToString()}";
 }

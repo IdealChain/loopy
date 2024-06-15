@@ -18,7 +18,10 @@ public class EventualStore : IConsistencyStore
 
     public Object Fetch(Key k, Priority p = default)
     {
+        if (!_node.Storage.TryGetValue(k, out var obj) || obj.IsEmpty)
+            obj = new Object();
+        
         // just fetch filled object from eventual store
-        return _node.Fill(k, _node.Storage[k], _node.NodeClock);
+        return _node.Fill(k, obj, _node.NodeClock);
     }
 }

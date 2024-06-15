@@ -64,8 +64,8 @@ public class ConsistencyTests
         await n1.Delete(b, mode: ReplicationMode.Sync);
         var n1A = await n1.Get(a);
         var n1B = await n1.Get(b);
-        Assert.That(n1A.values, Values.EqualTo(Value.None));
-        Assert.That(n1B.values, Values.EqualTo(Value.None));
+        Assert.That(n1A.values, Values.Empty());
+        Assert.That(n1B.values, Values.Empty());
         
         // FIFO consistency: we expect to see a=- BEFORE b=-, never after
         // N2: before anti-entropy, we expect the initial values a=0, b=0
@@ -79,8 +79,8 @@ public class ConsistencyTests
         // N2: after anti-entropy, we expect the latest values a=-, b=-
         n2A = await n2.Get(a, mode: ConsistencyMode.Fifo);
         n2B = await n2.Get(b, mode: ConsistencyMode.Fifo);
-        Assert.That(n2A.values, Is.Empty);
-        Assert.That(n2B.values, Is.Empty);
+        Assert.That(n2A.values, Values.Empty());
+        Assert.That(n2B.values, Values.Empty());
     }
 
     private readonly Key x = "P0_x";
@@ -120,9 +120,9 @@ public class ConsistencyTests
         n2X = await n2.Get(x, mode: ConsistencyMode.FifoHigh);
         n2Y = await n2.Get(y, mode: ConsistencyMode.FifoHigh);
         n2Z = await n2.Get(z, mode: ConsistencyMode.FifoHigh);
-        Assert.That(n2X.values, Is.Empty);
+        Assert.That(n2X.values, Values.Empty());
         Assert.That(n2Y.values, Values.EqualTo(v2));
-        Assert.That(n2Z.values, Is.Empty);
+        Assert.That(n2Z.values, Values.Empty());
 
         await c.RunBackgroundTasksOnce();
 
@@ -138,8 +138,8 @@ public class ConsistencyTests
         n2X = await n2.Get(x, mode: ConsistencyMode.FifoHigh);
         n2Y = await n2.Get(y, mode: ConsistencyMode.FifoHigh);
         n2Z = await n2.Get(z, mode: ConsistencyMode.FifoHigh);
-        Assert.That(n2X.values, Is.Empty);
+        Assert.That(n2X.values, Values.Empty());
         Assert.That(n2Y.values, Values.EqualTo(v2));
-        Assert.That(n2Z.values, Is.Empty);
+        Assert.That(n2Z.values, Values.Empty());
     }
 }

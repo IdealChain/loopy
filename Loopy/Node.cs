@@ -19,7 +19,7 @@ public partial class Node : IClientApi
 
     public NodeId Id => i;
     public ILogger Logger { get; }
-    private INodeContext Context { get; }
+    public INodeContext Context { get; }
 
     public Node(NodeId id, INodeContext context)
     {
@@ -29,7 +29,6 @@ public partial class Node : IClientApi
 
         ConsistencyStores[ConsistencyMode.Eventual] = new EventualStore(this);
         ConsistencyStores[ConsistencyMode.Fifo] = new FifoStore(this);
-        ConsistencyStores[ConsistencyMode.Causal] = new CausalStore(this);
     }
 
     /// <summary>
@@ -43,9 +42,9 @@ public partial class Node : IClientApi
     internal readonly Map<NodeId, UpdateIdSet> NodeClock = new();
 
     /// <summary>
-    /// Fifo version barrier (preceeding update id) up until priority
+    /// Fifo predecessor (preceeding update id with equal-or-higher priority)
     /// </summary>
-    internal readonly Map<Priority, int> FifoPredecessorClock = new();
+    internal readonly Map<Priority, int> FifoPriorityPredecessor = new();
 
     /// <summary>
     /// Maps dots of locally stored versions to keys -
@@ -84,7 +83,7 @@ public partial class Node : IClientApi
         var (vers, cc) = (o.DotValues, o.CausalContext);
 
         // remove object if there are only null values left and cc is empty
-        if (vers.Values.All(v => v.IsEmpty) && cc.Count == 0)
+        if (o.IsEmpty && cc.Count == 0)
             Storage.Remove(k);
         else
             Storage[k] = o;

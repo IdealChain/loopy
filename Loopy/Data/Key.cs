@@ -17,7 +17,7 @@ public readonly partial record struct Key
 
     public string Name { get; }
 
-    public Priority Priority { get; } = Priority.Bulk;
+    public Priority Priority { get; } = Priority.P0;
 
 
     public static implicit operator Key(string name) => new(name);

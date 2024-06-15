@@ -4,6 +4,7 @@ using Loopy.Enums;
 using Loopy.Interfaces;
 using NetMQ;
 using NetMQ.Sockets;
+using Object = Loopy.Data.Object;
 
 namespace Loopy.Comm.Network
 {
@@ -46,6 +47,11 @@ namespace Loopy.Comm.Network
             };
             var resp = await _netMqSocket.RemoteCall<NodeSyncClockRequest, NodeSyncClockResponse>(req, _cancellationTokenSource.Token);
             return (resp.NodeClock, resp.MissingObjects.Select(kv => ((Key)kv.Key, (Data.Object)kv.Value)).ToList());
-        }        
+        }
+
+        public Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncFifoClock(NodeId p, Priority prio, Map<NodeId, UpdateIdSet> nodeClockP)
+        {
+            return default; // TODO
+        }
     }
 }

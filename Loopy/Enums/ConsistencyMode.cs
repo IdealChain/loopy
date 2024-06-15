@@ -6,9 +6,9 @@ namespace Loopy.Enums
         Fifo,
         Causal,
 
-        FifoAll = Fifo | (Priority.Bulk << 4),
-        FifoLow = Fifo | (Priority.Low << 4),
-        FifoNormal = Fifo | (Priority.Normal << 4),
-        FifoHigh = Fifo | (Priority.High << 4),
+        FifoAll = Fifo | (Priority.P0 << 4),
+        FifoLow = Fifo | (Priority.P1 << 4),
+        FifoNormal = Fifo | (Priority.P2 << 4),
+        FifoHigh = Fifo | (Priority.P3 << 4),
     }
 }

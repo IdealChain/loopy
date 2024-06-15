@@ -2,9 +2,24 @@ namespace Loopy.Enums
 {
     public enum Priority
     {
-        Bulk = 0,
-        Low = 1,
-        Normal = 2,
-        High = 3,
+        /// <summary>
+        /// Bulk
+        /// </summary>
+        P0 = 0,
+        
+        /// <summary>
+        /// Low
+        /// </summary>
+        P1 = 1,
+        
+        /// <summary>
+        /// NOrmal
+        /// </summary>
+        P2 = 2,
+        
+        /// <summary>
+        /// High
+        /// </summary>
+        P3 = 3,
     }
 }

@@ -19,7 +19,7 @@ public class RpcMessageAttribute : Attribute
 
     public RpcMessageAttribute(RpcOperation type, RpcDirection direction)
     {
-        Debug.Assert(type != RpcOperation.None);
+        Trace.Assert(type != RpcOperation.None);
 
         Type = type;
         Direction = direction;

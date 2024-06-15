@@ -88,5 +88,12 @@ public class LocalNodeCluster : IEnumerable<NodeId>, INodeContext
             using (await _node.NodeLock.Enter(CancellationToken.None))
                 return _node.SyncClock(p, nodeClockP);
         }
+
+        public async Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncFifoClock(
+            NodeId p, Priority prio, Map<NodeId, UpdateIdSet> nodeClockP)
+        {
+            using (await _node.NodeLock.Enter(CancellationToken.None))
+                return _node.SyncFifoClock(p, prio, nodeClockP);
+        }
     }
 }
