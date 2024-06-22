@@ -14,6 +14,7 @@ public class ClientApiClient : IDisposable, IClientApi
 
     public ClientApiClient(string host = "localhost")
     {
+        Host = host;
         _netMqSocket = new RequestSocket($">tcp://{host}:{ClientApiServer.Port}");
     }
 
@@ -22,13 +23,17 @@ public class ClientApiClient : IDisposable, IClientApi
         _cancellationTokenSource.Cancel();
         _netMqSocket.Dispose();
     }
+    
+    public string Host { get; }
 
     public async Task<(Value[] values, CausalContext cc)> Get(Key k, int quorum = 1, ConsistencyMode mode = default)
     {
         var req = new ClientGetRequest { Key = k.Name, Quorum = quorum, Mode = mode };
         var resp = await _netMqSocket.RemoteCall<ClientGetRequest, ClientGetResponse>(req, _cancellationTokenSource.Token);
 
-        return (resp.Values.Select(v => new Value(v)).ToArray(), resp.CausalContext);
+        return (
+            resp.Values?.Select(v => new Value(v))?.ToArray() ?? Array.Empty<Value>(),
+            resp.CausalContext);
     }
 
     public async Task Put(Key k, Value v, CausalContext? cc = default, ReplicationMode mode = default)

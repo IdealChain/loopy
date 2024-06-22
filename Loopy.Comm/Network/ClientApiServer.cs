@@ -8,7 +8,7 @@ namespace Loopy.Comm.Network;
 
 public class ClientApiServer : IDisposable
 {
-    public const ushort Port = 5555;
+    public const ushort Port = 1338;
 
     private readonly IClientApi _node;
     private readonly NetMQSocket _netMqSocket;

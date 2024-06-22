@@ -24,21 +24,21 @@ namespace Loopy.Comm.Network
             _netMqSocket.Dispose();
         }
 
-        public async Task<Data.Object> Fetch(Key k, ConsistencyMode mode)
+        public async Task<Object> Fetch(Key k, ConsistencyMode mode)
         {
             var req = new NodeFetchRequest { Key = k.Name, Mode = mode };
             var resp = await _netMqSocket.RemoteCall<NodeFetchRequest, NodeFetchResponse>(req, _cancellationTokenSource.Token);
             return resp.Obj;
         }
 
-        public async Task<Data.Object> Update(Key k, Data.Object o)
+        public async Task<Object> Update(Key k, Object o)
         {
             var req = new NodeUpdateRequest { Key = k.Name, Obj = o };
             var resp = await _netMqSocket.RemoteCall<NodeUpdateRequest, NodeUpdateResponse>(req, _cancellationTokenSource.Token);
             return resp.Obj;
         }
 
-        public async Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Data.Object)> missingObjects)> SyncClock(NodeId p, Map<NodeId, UpdateIdSet> nodeClockP)
+        public async Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncClock(NodeId p, Map<NodeId, UpdateIdSet> nodeClockP)
         {
             var req = new NodeSyncClockRequest
             {
@@ -46,7 +46,7 @@ namespace Loopy.Comm.Network
                 NodeClock = nodeClockP,
             };
             var resp = await _netMqSocket.RemoteCall<NodeSyncClockRequest, NodeSyncClockResponse>(req, _cancellationTokenSource.Token);
-            return (resp.NodeClock, resp.MissingObjects.Select(kv => ((Key)kv.Key, (Data.Object)kv.Value)).ToList());
+            return (resp.NodeClock, resp.MissingObjects.Select(kv => ((Key)kv.Key, (Object)kv.Value)).ToList());
         }
 
         public Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncFifoClock(NodeId p, Priority prio, Map<NodeId, UpdateIdSet> nodeClockP)

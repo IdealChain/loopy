@@ -1,5 +1,4 @@
 using Loopy.Comm.Messages;
-using Loopy.Data;
 using Loopy.Interfaces;
 using NetMQ;
 using NetMQ.Sockets;
@@ -8,7 +7,7 @@ namespace Loopy.Comm.Network;
 
 public class NodeApiServer : IDisposable
 {
-    public const ushort Port = 5555;
+    public const ushort Port = 1337;
 
     private readonly IRemoteNodeApi _node;
     private readonly NetMQSocket _netMqSocket;

@@ -14,7 +14,7 @@ public partial class Node
             var replicaNodes = Context.GetReplicaNodes(k)
                 .OrderByDescending(n => n == i)
                 .Select(Context.GetNodeApi);
-            
+
             var objs = new List<Data.Object>();
             var fetchTasks = replicaNodes.Take(quorum).Select(api => api.Fetch(k, mode)).ToList();
 
@@ -48,11 +48,11 @@ public partial class Node
             o.FifoDistances[(i, c)] = new FifoDistances(FifoPriorityPredecessor, c);
             o.CausalContext.MergeIn(cc ?? CausalContext.Initial);
             o.CausalContext[i] = c;
-            
+
             // raise fifo predecessor for all lower-or-equal priorities
             for (var p = Priority.P0; p <= keyPriority; p++)
                 FifoPriorityPredecessor[p] = c;
-            
+
             // update and merge local object
             o = Update(k, o);
 
@@ -61,9 +61,16 @@ public partial class Node
             // forward the update to other key replicas
             async Task Replicate(string m)
             {
-                var replicaTasks = replicaNodes.Select(n => n.Update(k, o));
-                await Task.WhenAll(replicaTasks);
-                Logger.Trace("replicated [{Mode}]", m);
+                try
+                {
+                    var replicaTasks = replicaNodes.Select(n => n.Update(k, o));
+                    await Task.WhenAll(replicaTasks);
+                    Logger.Trace("replicated [{Mode}]", m);
+                }
+                catch (OperationCanceledException e)
+                {
+                    Logger.Trace("replication canceled");
+                }
             }
 
             if (mode == ReplicationMode.Sync)
