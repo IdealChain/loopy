@@ -1,62 +1,68 @@
 using Loopy.Comm.Messages;
-using Loopy.Interfaces;
-using NetMQ;
+using Loopy.Data;
 using NetMQ.Sockets;
+using NLog;
 
 namespace Loopy.Comm.Network;
 
-public class NodeApiServer : IDisposable
+public class NodeApiServer(LocalNodeApi node, string host = "*")
 {
     public const ushort Port = 1337;
 
-    private readonly IRemoteNodeApi _node;
-    private readonly NetMQSocket _netMqSocket;
-
-    public NodeApiServer(IRemoteNodeApi node, string host = "*")
-    {
-        _node = node;
-        _netMqSocket = new ResponseSocket($"@tcp://{host}:{Port}");
-    }
-
-    public void Dispose()
-    {
-        _netMqSocket.Dispose();
-    }
+    private readonly Logger _logger = LogManager.GetLogger($"{nameof(NodeApiServer)}({node.NodeId})");
+    private RouterSocket? _routerSocket;
 
     public async Task HandleRequests(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            var req = await _netMqSocket.ReceiveMessage(cancellationToken);
-            await Handle((dynamic)req);
+            using (_routerSocket = new RouterSocket($"@tcp://{host}:{Port}"))
+            {
+                _logger.Info("ready ({Host}:{Port})", host, Port);
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    var (request, header) = await _routerSocket.ReceiveMessage(cancellationToken);
+                    using (await node.Lock(cancellationToken))
+                    {
+                        if (await Handle((dynamic)request) is IMessage response)
+                            _routerSocket.SendMessage(response, header);
+                    }
+                }
+            }
+        }
+        catch (Exception e) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.Fatal(e);
+            throw;
         }
     }
 
-    private Task Handle(IMessage _)
+    private Task<IMessage?> Handle(IMessage req)
     {
-        _netMqSocket.SendFrameEmpty(); // fallback: ack with empty frame
-        return Task.CompletedTask;
+        _logger.Warn("unhandled request msg: {Type}", req.GetType());
+        return Task.FromResult<IMessage?>(null);
     }
 
-    private async Task Handle(NodeFetchRequest fetchRequest)
+    private async Task<IMessage?> Handle(NodeFetchRequest fetchRequest)
     {
-        var fetchResult = await _node.Fetch(fetchRequest.Key, fetchRequest.Mode);
-        _netMqSocket.SendMessage(new NodeFetchResponse { Obj = fetchResult });
+        var fetchResult = await node.Fetch(fetchRequest.Key, fetchRequest.Mode);
+        return new NodeFetchResponse { Obj = fetchResult };
     }
 
-    private async Task Handle(NodeUpdateRequest updateRequest)
+    private async Task<IMessage?> Handle(NodeUpdateRequest updateRequest)
     {
-        var updateResult = await _node.Update(updateRequest.Key, updateRequest.Obj);
-        _netMqSocket.SendMessage(new NodeUpdateResponse { Obj = updateResult });
+        var updateResult = await node.Update(updateRequest.Key, updateRequest.Obj ?? new Data.Object());
+        return new NodeUpdateResponse { Obj = updateResult };
     }
 
-    private async Task Handle(NodeSyncClockRequest syncRequest)
+    private async Task<IMessage?> Handle(NodeSyncClockRequest syncRequest)
     {
-        var syncResult = await _node.SyncClock(syncRequest.NodeId, syncRequest.NodeClock);
-        _netMqSocket.SendMessage(new NodeSyncClockResponse
+        var (nodeClock, missingObjects) =
+            await node.SyncClock(syncRequest.NodeId, syncRequest.NodeClock ?? new Map<NodeId, UpdateIdSet>());
+        return new NodeSyncClockResponse
         {
-            NodeClock = syncResult.NodeClock,
-            MissingObjects = syncResult.missingObjects.ToDictionary(t => t.Item1.Name, t => (ObjectMsg)t.Item2),
-        });
+            NodeClock = nodeClock,
+            MissingObjects = missingObjects.ToDictionary(t => t.Item1.Name, t => (ObjectMsg)t.Item2),
+        };
     }
 }

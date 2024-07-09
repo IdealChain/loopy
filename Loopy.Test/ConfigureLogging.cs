@@ -1,14 +1,15 @@
 using NLog;
 using NLog.Layouts;
 using NLog.Targets;
+using NUnit.Framework;
 
 namespace Loopy.Test;
 
 [SetUpFixture]
-public class SetupTestEnvironment
+public class ConfigureLogging
 {
     [OneTimeSetUp]
-    public void StartTest()
+    public void Setup()
     {
         // enable Trace logging to test output
         var console = new ConsoleTarget("console")
@@ -22,8 +23,5 @@ public class SetupTestEnvironment
     }
 
     [OneTimeTearDown]
-    public void EndTest()
-    {
-        LogManager.Flush();
-    }
+    public void TearDown() => LogManager.Flush();
 }

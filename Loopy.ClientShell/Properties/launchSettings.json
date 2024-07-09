@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "Loopy.ClientShell": {
+      "commandName": "Project"
+    }
+  }
+}

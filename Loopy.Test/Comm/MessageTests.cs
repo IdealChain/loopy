@@ -1,10 +1,11 @@
 using Loopy.Comm.Messages;
 using Loopy.Enums;
 using NetMQ;
+using NUnit.Framework;
 
-namespace Loopy.Test.Network;
+namespace Loopy.Test.Comm;
 
-public class MessageSerializerTests
+public class MessageTests
 {
     [Test]
     public void TestGetProtoDefinitions()

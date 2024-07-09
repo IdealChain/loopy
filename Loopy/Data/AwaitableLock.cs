@@ -1,26 +1,34 @@
-namespace Loopy.Data
-{
-    public class AwaitableLock
-    {
-        private SemaphoreSlim _semaphore = new(1, 1);
+using NLog;
 
-        public async Task<IDisposable> Enter(CancellationToken cancellationToken)
+namespace Loopy.Data;
+
+public class AwaitableLock
+{
+    private static TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
+
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private readonly ILogger _logger = LogManager.GetLogger(nameof(AwaitableLock));
+
+    public async Task<IDisposable> EnterAsync(CancellationToken cancellationToken = default)
+    {
+        try
         {
-            await _semaphore.WaitAsync(cancellationToken);
+            await _semaphore.WaitAsync(DefaultTimeout, cancellationToken);
             return new LockToken(_semaphore);
         }
-
-        private sealed class LockToken : IDisposable
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            private SemaphoreSlim? _semaphore;
+            _logger.Warn("lock timeout!");
+            throw;
+        }
+    }
 
-            public LockToken(SemaphoreSlim semaphore) => _semaphore = semaphore;
-
-            public void Dispose()
-            {
-                _semaphore?.Release();
-                _semaphore = null;
-            }
+    private struct LockToken(SemaphoreSlim? semaphore) : IDisposable
+    {
+        public void Dispose()
+        {
+            semaphore?.Release();
+            semaphore = null;
         }
     }
 }

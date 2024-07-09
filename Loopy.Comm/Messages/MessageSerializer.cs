@@ -38,7 +38,6 @@ namespace Loopy.Comm.Messages
 
         public static void Serialize(NetMQMessage target, IMessage msg)
         {
-            Trace.Assert(target.IsEmpty);
             if (!MessageIds.TryGetValue(msg.GetType(), out var id))
                 throw new InvalidOperationException($"Unknown msg type {msg.GetType()}");
 
@@ -51,18 +50,18 @@ namespace Loopy.Comm.Messages
             target.Append(new NetMQFrame(ms.GetBuffer(), (int)ms.Length));
         }
 
-        public static IMessage Deserialize(NetMQMessage source)
+        public static IMessage Deserialize(NetMQMessage source, int start = 0)
         {
-            if (source.FrameCount != 2)
-                throw new InvalidOperationException($"Expected 2 frames, got {source.FrameCount}");
+            if (source.FrameCount - start != 2)
+                throw new InvalidOperationException($"Expected 2 frames, got {source.FrameCount - start}");
 
-            var header = Serializer.Deserialize<MessageHeader>(source[0].AsSpan());
+            var header = Serializer.Deserialize<MessageHeader>(source[start].AsSpan());
             var id = (header.Type, header.Direction);
 
             if (!MessageTypes.TryGetValue(id, out var messageType))
                 throw new InvalidOperationException($"Unknown msg type {header.Type}");
 
-            return (IMessage)Serializer.NonGeneric.Deserialize(messageType, source[1].AsSpan());
+            return (IMessage)Serializer.NonGeneric.Deserialize(messageType, source[start + 1].AsSpan());
         }
     }
 }

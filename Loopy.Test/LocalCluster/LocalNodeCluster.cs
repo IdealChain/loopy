@@ -1,59 +1,60 @@
 using System.Collections;
 using Loopy.Data;
+using Loopy.Enums;
 using Loopy.Interfaces;
 
 namespace Loopy.Test.LocalCluster;
 
 public class LocalNodeCluster : IEnumerable<NodeId>, INodeContext
 {
-    private readonly Dictionary<NodeId, Node> _nodes;
-    private CancellationTokenSource? _cancellationSource;
-    private List<Task> _backgroundTasks = new();
+    private readonly Dictionary<NodeId, Node> _nodes = new();
+    private readonly Dictionary<NodeId, LocalBackgroundTasks> _backgroundTasks = new();
 
     public LocalNodeCluster(int nodeCount)
     {
-        _nodes = Enumerable.Range(1, nodeCount)
-            .Select(i => new NodeId(i))
-            .ToDictionary(n => n, n => new Node(n, this));
-    }
-
-    public void StartBackgroundTasks(double stripInterval = 30, double antiEntropyInterval = 30)
-    {
-        _ = StopBackgroundTasks();
-
-        foreach (var node in _nodes.Values)
+        foreach (var nodeId in Enumerable.Range(1, nodeCount).Select(i => new NodeId(i)))
         {
-            // start causality stripping and anti entropy background processes
-            _backgroundTasks.Add(node.StripCausality(TimeSpan.FromSeconds(stripInterval), _cancellationSource!.Token));
-            _backgroundTasks.Add(
-                node.AntiEntropy(TimeSpan.FromSeconds(antiEntropyInterval), _cancellationSource!.Token));
+            _nodes[nodeId] = new Node(nodeId, this);
+            _backgroundTasks[nodeId] = new LocalBackgroundTasks(_nodes[nodeId]);
         }
-    }
-
-    public Task StopBackgroundTasks()
-    {
-        _cancellationSource?.Cancel();
-        _cancellationSource?.Dispose();
-        _cancellationSource = new CancellationTokenSource();
-
-        var pendingTasks = _backgroundTasks;
-        _backgroundTasks = new();
-        return Task.WhenAll(pendingTasks);
-    }
-
-    public async Task RunBackgroundTasksOnce()
-    {
-        StartBackgroundTasks();
-        await StopBackgroundTasks();
     }
 
     public IEnumerable<NodeId> GetReplicaNodes(Key key) => _nodes.Keys;
 
     public IEnumerable<NodeId> GetPeerNodes(NodeId n) => _nodes.Keys;
 
-    public IRemoteNodeApi GetNodeApi(NodeId id) => new RemoteNodeApiWrapper(_nodes[id]);
+    public LocalNodeApi GetNodeApi(NodeId id) => new LocalNodeApi(_nodes[id]);
 
-    public IClientApi GetClientApi(NodeId id) => _nodes[id];
+    INodeApi INodeContext.GetNodeApi(NodeId id) => GetNodeApi(id);
+
+    public LocalClientApi GetClientApi(NodeId id) => new LocalClientApi(_nodes[id]);
+
+    public LocalClientApi GetClientApi(NodeId id, ConsistencyMode consistency = ConsistencyMode.Eventual)
+    {
+        return new LocalClientApi(_nodes[id])
+        {
+            ConsistencyMode = consistency
+        };
+    }
+
+    public LocalClientApi GetClientApi(NodeId id, ConsistencyMode consistency, NodeId[] replicationFilter)
+    {
+        return new LocalClientApi(_nodes[id])
+        {
+            ConsistencyMode = consistency,
+            ReplicationFilter = replicationFilter
+        };
+    }
+
+    public LocalClientApi GetClientApi(NodeId id, NodeId[] replicationFilter)
+    {
+        return new LocalClientApi(_nodes[id])
+        {
+            ReplicationFilter = replicationFilter
+        };
+    }
+
+    public LocalBackgroundTasks GetBackgroundTasks(NodeId id) => _backgroundTasks[id];
 
     public IEnumerator<NodeId> GetEnumerator() => _nodes.Keys.GetEnumerator();
 

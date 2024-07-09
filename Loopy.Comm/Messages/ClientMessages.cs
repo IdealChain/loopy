@@ -1,6 +1,4 @@
-﻿using Loopy.Data;
-using Loopy.Enums;
-using Loopy.Interfaces;
+﻿using Loopy.Enums;
 using ProtoBuf;
 
 namespace Loopy.Comm.Messages;
@@ -18,7 +16,7 @@ public class ClientGetRequest : IMessage
 [ProtoContract]
 public class ClientGetResponse : IMessage
 {
-    [ProtoMember(1)] public required string[] Values { get; set; }
+    [ProtoMember(1)] public required string[]? Values { get; set; }
     [ProtoMember(2)] public required CausalContextMsg CausalContext { get; set; }
 }
 
@@ -29,7 +27,6 @@ public class ClientPutRequest : IMessage
     [ProtoMember(1)] public required string Key { get; set; }
     [ProtoMember(2)] public required string Value { get; set; }
     [ProtoMember(3)] public CausalContextMsg? CausalContext { get; set; }
-    [ProtoMember(4)] public ReplicationMode? Mode { get; set; }
 }
 
 [RpcMessage(RpcOperation.ClientPut, RpcDirection.Response)]

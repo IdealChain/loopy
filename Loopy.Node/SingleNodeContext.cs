@@ -8,7 +8,7 @@ internal class SingleNodeContext : INodeContext, IDisposable
 {
     private readonly NodeId _nodeId;
     private readonly NodeId[] _peers;
-    private readonly Dictionary<NodeId, IRemoteNodeApi> _clients = new();
+    private readonly Dictionary<NodeId, INodeApi> _nodeApis = new();
 
     public SingleNodeContext(NodeId nodeId, IEnumerable<NodeId> peers)
     {
@@ -16,7 +16,7 @@ internal class SingleNodeContext : INodeContext, IDisposable
         _peers = peers.ToArray();
 
         Node = new Node(nodeId, this);
-         _clients[nodeId] = new RemoteNodeApiWrapper(Node);
+        _nodeApis[nodeId] = new LocalNodeApi(Node);
     }
 
     public Node Node { get; }
@@ -25,21 +25,21 @@ internal class SingleNodeContext : INodeContext, IDisposable
 
     public IEnumerable<NodeId> GetPeerNodes(NodeId n) => _peers.Prepend(_nodeId);
 
-    public IRemoteNodeApi GetNodeApi(NodeId id)
+    public INodeApi GetNodeApi(NodeId id)
     {
-        if (!_clients.TryGetValue(id, out var client))
-            client = _clients[id] = new NodeApiClient(GetHost(id));
+        if (!_nodeApis.TryGetValue(id, out var nodeApi))
+            nodeApi = _nodeApis[id] = new RemoteNodeApi(GetHost(id));
 
-        return client;
+        return nodeApi;
     }
-
+    
     public string GetHost(NodeId id) => $"127.0.0.{id.Id}";
 
     public void Dispose()
     {
-        foreach (var client in _clients.Values.OfType<IDisposable>())
+        foreach (var client in _nodeApis.Values.OfType<IDisposable>())
             client.Dispose();
 
-        _clients.Clear();
+        _nodeApis.Clear();
     }
 }

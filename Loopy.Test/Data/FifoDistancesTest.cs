@@ -1,5 +1,6 @@
 using Loopy.Data;
 using Loopy.Enums;
+using NUnit.Framework;
 
 namespace Loopy.Test.Data
 {

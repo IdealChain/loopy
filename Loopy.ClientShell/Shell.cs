@@ -1,23 +1,26 @@
 ﻿using Loopy.Comm.Network;
 using Loopy.Data;
+using Loopy.Enums;
+using NetMQ;
 using Spectre.Console;
 using System.CommandLine;
+using System.Diagnostics;
+using System.Text;
 
 namespace Loopy.ClientShell;
 
 internal class Shell
 {
-    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(10);
 
-    private ClientApiClient _client;
-    private CausalContext _causalContext = CausalContext.Initial;
+    private readonly RemoteClientApi _remoteClient;
     private readonly CancellationToken _cancellationToken;
-    private bool _exit;    
+    private bool _exit;
 
     public Shell(string host, CancellationToken cancellationToken)
     {
         _cancellationToken = cancellationToken;
-        _client = new ClientApiClient(host);
+        _remoteClient = new RemoteClientApi(host);
     }
 
     public async Task Run()
@@ -25,57 +28,79 @@ internal class Shell
         var shellCommand = BuildShellCommand();
         while (!_cancellationToken.IsCancellationRequested && !_exit)
         {
-            var line = AnsiConsole.Ask<string>($"{_client.Host}>");
-            if (line != null && !_cancellationToken.IsCancellationRequested && !_exit)
+            var line = AnsiConsole.Ask<string>(GetPrompt());
+            if (!_cancellationToken.IsCancellationRequested && !_exit)
                 await shellCommand.InvokeAsync(line);
         }
     }
 
-    private RootCommand BuildShellCommand()
+    private string GetPrompt()
     {
-        var shellCommand = new RootCommand("Data Store Shell");
-        var keyArgument = new Argument<string>("key");
-        var valueArgument = new Argument<string>("value");
-        var hostArgument = new Argument<string>("host", "Node to connect to");
+        var prompt = new StringBuilder(_remoteClient.Host);
+        prompt.AppendFormat("/{0}", _remoteClient.ConsistencyMode);
 
-        var getCommand = new Command("get", "Read key's value");
-        getCommand.AddAlias("g");
-        getCommand.Add(keyArgument);
-        getCommand.SetHandler(key => WrapCommand(Get, key), keyArgument);
-        shellCommand.Add(getCommand);
+        if (_remoteClient.ReadQuorum > 1)
+            prompt.AppendFormat("/rq{0}", _remoteClient.ReadQuorum);
 
-        var putCommand = new Command("put", "Update key's value");
-        putCommand.AddAlias("p");
-        putCommand.Add(keyArgument);
-        putCommand.Add(valueArgument);
-        putCommand.SetHandler((key, value) => WrapCommand(Put, key, value), keyArgument, valueArgument);
-        shellCommand.Add(putCommand);
-
-        var deleteCommand = new Command("delete", "Delete key's value");
-        deleteCommand.AddAlias("d");
-        deleteCommand.Add(keyArgument);
-        deleteCommand.SetHandler(key => WrapCommand(Delete, key), keyArgument);
-        shellCommand.Add(deleteCommand);
-
-        var changeNodeCommand = new Command("connect", "Connect to different node");
-        changeNodeCommand.Add(hostArgument);
-        changeNodeCommand.AddAlias("c");
-        changeNodeCommand.SetHandler(ChangeNode, hostArgument);
-        shellCommand.Add(changeNodeCommand);
-
-        var exitCommand = new Command("exit", "Quit");
-        exitCommand.AddAlias("q");
-        exitCommand.SetHandler(() => _exit = true);
-        shellCommand.Add(exitCommand);
-
-        return shellCommand;
+        prompt.Append(">");
+        return prompt.ToString();
     }
 
-    private void ChangeNode(string host)
+    private RootCommand BuildShellCommand()
     {
-        _client.Dispose();
-        _client = new ClientApiClient(host);
-        _causalContext = CausalContext.Initial;
+        var shellCmd = new RootCommand("Data Store Shell");
+        var keyArg = new Argument<string>("key");
+        var valueArg = new Argument<string>("value");
+        var hostArg = new Argument<string>("host", "Node to connect to");
+        var consistencyArg = new Argument<ConsistencyMode>("mode", "Consistency model for queries");
+        var quorumArg = new Argument<int>("quorum", "Number of replica nodes to query");
+
+        var getCmd = new Command("get", "Read key's value");
+        getCmd.AddAlias("g");
+        getCmd.Add(keyArg);
+        getCmd.SetHandler(key => WrapCommand(Get, key), keyArg);
+        shellCmd.Add(getCmd);
+
+        var putCmd = new Command("put", "Update key's value");
+        putCmd.AddAlias("p");
+        putCmd.Add(keyArg);
+        putCmd.Add(valueArg);
+        putCmd.SetHandler((key, value) => WrapCommand(Put, key, value), keyArg, valueArg);
+        shellCmd.Add(putCmd);
+
+        var deleteCmd = new Command("del", "Delete key's value");
+        deleteCmd.AddAlias("d");
+        deleteCmd.Add(keyArg);
+        deleteCmd.SetHandler(key => WrapCommand(Delete, key), keyArg);
+        shellCmd.Add(deleteCmd);
+
+        var showCausalContextCmd = new Command("cc", "Display current causal context");
+        showCausalContextCmd.SetHandler(ShowCausalContext);
+        shellCmd.Add(showCausalContextCmd);
+
+        var setConsistencyCmd = new Command("cm", "Set consistency model");
+        setConsistencyCmd.Add(consistencyArg);
+        setConsistencyCmd.SetHandler(SetConsistency, consistencyArg);
+        shellCmd.Add(setConsistencyCmd);
+
+        var setQuorumCmd = new Command("rq", "Set replica read quorum");
+        setQuorumCmd.Add(quorumArg);
+        setQuorumCmd.SetHandler(SetQuorum, quorumArg);
+        shellCmd.Add(setQuorumCmd);
+
+        var changeNodeCmd = new Command("connect", "Connect to different node");
+        changeNodeCmd.Add(hostArg);
+        changeNodeCmd.AddAlias("c");
+        changeNodeCmd.SetHandler(ChangeNode, hostArg);
+        shellCmd.Add(changeNodeCmd);
+
+        var exitCmd = new Command("quit", "Quit");
+        exitCmd.AddAlias("q");
+        exitCmd.AddAlias("exit");
+        exitCmd.SetHandler(() => _exit = true);
+        shellCmd.Add(exitCmd);
+
+        return shellCmd;
     }
 
     private static async Task WrapCommand<T>(Func<T, CancellationToken, Task<string>> func, T arg)
@@ -85,37 +110,63 @@ internal class Shell
         {
             try
             {
+                var sw = Stopwatch.StartNew();
                 var result = await func(arg, timeout.Token);
-                AnsiConsole.WriteLine(result);
+                AnsiConsole.WriteLine($"{result} ({sw.ElapsedMilliseconds} ms)");
             }
             catch (OperationCanceledException)
             {
-                AnsiConsole.WriteLine("Timeout.");
+                AnsiConsole.WriteLine("Timeout");
             }
         });
     }
 
-    private static async Task WrapCommand<T1, T2>(Func<T1, T2, CancellationToken, Task<string>> func, T1 arg1, T2 arg2)
+    private async Task WrapCommand<T1, T2>(Func<T1, T2, CancellationToken, Task<string>> func, T1 arg1, T2 arg2)
     {
         await WrapCommand((arg1, ct) => func(arg1, arg2, ct), arg1);
     }
 
     private async Task<string> Get(string key, CancellationToken cancellationToken)
     {
-        var (values, cc) = await _client.Get(key);
-        _causalContext = cc;
+        var (values, cc) = await _remoteClient.Get(key, cancellationToken: cancellationToken);
         return values.Length > 0 ? string.Join(", ", values) : "Empty";
     }
 
     private async Task<string> Put(string key, string value, CancellationToken cancellationToken)
     {
-        await _client.Put(key, value, _causalContext);
+        await _remoteClient.Put(key, value, cancellationToken: cancellationToken);
         return "OK";
     }
 
     private async Task<string> Delete(string key, CancellationToken cancellationToken)
     {
-        await _client.Delete(key, _causalContext);
+        await _remoteClient.Delete(key, cancellationToken: cancellationToken);
         return "OK";
+    }
+
+    private void SetConsistency(ConsistencyMode mode)
+    {
+        _remoteClient.ConsistencyMode = mode;
+        _remoteClient.CausalContext = CausalContext.Initial;
+    }
+
+    private void SetQuorum(int quorum)
+    {
+        _remoteClient.ReadQuorum = quorum;
+    }
+
+    private void ShowCausalContext()
+    {
+        foreach (var kv in _remoteClient.CausalContext)
+            AnsiConsole.WriteLine("{0}: {1}", kv.Key, kv.Value);
+    }
+
+    private void ChangeNode(string host)
+    {
+        // expand node ID shorthand
+        if (int.TryParse(host, out var id))
+            host = $"127.0.0.{id}";
+
+        _remoteClient.Host = host;
     }
 }

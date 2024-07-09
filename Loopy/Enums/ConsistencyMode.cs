@@ -4,7 +4,6 @@ namespace Loopy.Enums
     {
         Eventual,
         Fifo,
-        Causal,
 
         FifoAll = Fifo | (Priority.P0 << 4),
         FifoLow = Fifo | (Priority.P1 << 4),

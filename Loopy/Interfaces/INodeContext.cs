@@ -21,5 +21,5 @@ public interface INodeContext
     /// <summary>
     /// Gets the node-to-node RPC API 
     /// </summary>
-    IRemoteNodeApi GetNodeApi(NodeId id);
+    INodeApi GetNodeApi(NodeId id);
 }

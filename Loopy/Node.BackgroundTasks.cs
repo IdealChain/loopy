@@ -2,108 +2,93 @@ using Loopy.Consistency;
 using Loopy.Data;
 using Loopy.Enums;
 using NLog;
+using System.Diagnostics;
 using Object = Loopy.Data.Object;
 
 namespace Loopy;
 
 public partial class Node
 {
-    public async Task StripCausality(TimeSpan stripInterval, CancellationToken cancellationToken)
+    public Task StripCausality()
     {
-        while (!cancellationToken.IsCancellationRequested)
+        using (ScopeContext.PushNestedState("StripCausality"))
         {
-            using (await NodeLock.Enter(cancellationToken))
-            using (ScopeContext.PushNestedState("StripCausality"))
-            {
-                Logger.Trace("stripping...");
-                foreach (var k in NonStrippedKeys.ToList())
-                    Store(k, Storage[k]);
-            }
-
-            await Task.Delay(stripInterval, cancellationToken).ContinueWith(_ => { });
+            foreach (var k in NonStrippedKeys.ToList())
+                Store(k, Storage[k]);
         }
+
+        return Task.CompletedTask;
     }
 
-    public async Task AntiEntropy(TimeSpan syncInterval, CancellationToken cancellationToken)
+    public async Task AntiEntropy(NodeId peer, CancellationToken cancellationToken = default)
     {
-        // random peer choice from all peers except oneself
-        var rand = new Random(i.Id);
-        var peerNodes = Context.GetPeerNodes(i).Where(j => j != i).ToArray();
+        Trace.Assert(peer != Id);
+
         var prios = Enum.GetValues<Priority>().ToArray();
+        var peerApi = Context.GetNodeApi(peer);
 
-        while (!cancellationToken.IsCancellationRequested)
+        using (ScopeContext.PushNestedState($"AntiEntropy({Id}<-{peer})"))
         {
-            using (ScopeContext.PushNestedState($"AntiEntropy"))
-            {
-                var p = peerNodes[rand.Next(peerNodes.Length)];
-                var nodeApi = Context.GetNodeApi(p);
+            Logger.Trace("requesting missing objects");
+            var (pNodeClock, pMissingObjects) = await peerApi.SyncClock(i, NodeClock, cancellationToken);
 
-                Logger.Trace("syncing with {Node}...", p);
-                var (pNodeClock, pMissingObjects) = await nodeApi.SyncClock(i, NodeClock);
+            // also fetch missing Fifo objects
+            var d = new Map<Priority, (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)>();
+            var fifoStore = (FifoStore)ConsistencyStores[ConsistencyMode.Fifo];
+            foreach (var prio in prios)
+                d[prio] = await peerApi.SyncFifoClock(i, prio, fifoStore.GetClock(prio), cancellationToken);
 
-                // also fetch missing Fifo objects
-                var d = new Map<Priority, (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)>();
-                var fifoStore = (FifoStore)ConsistencyStores[ConsistencyMode.Fifo];
-                foreach (var prio in prios)
-                    d[prio] = await nodeApi.SyncFifoClock(i, prio, fifoStore.GetClock(prio));
+            SyncRepair(peer, pNodeClock, pMissingObjects);
 
-                using (await NodeLock.Enter(cancellationToken))
-                {
-                    SyncRepair(p, pNodeClock, pMissingObjects);
-
-                    // also repair Fifo stores
-                    foreach (var prio in prios)
-                        fifoStore.SyncRepair(p, prio, d[prio].NodeClock, d[prio].missingObjects);
-                }
-            }
-
-            await Task.Delay(syncInterval, cancellationToken).ContinueWith(_ => { });
+            // also repair Fifo stores
+            foreach (var prio in prios)
+                fifoStore.SyncRepair(peer, prio, d[prio].NodeClock, d[prio].missingObjects);
         }
     }
 
     public (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects) SyncClock(
-        NodeId p, Map<NodeId, UpdateIdSet> pNodeClock)
+        NodeId peer, Map<NodeId, UpdateIdSet> peerNodeClock)
     {
-        using (ScopeContext.PushNestedState($"SyncClock({p})"))
+        using (ScopeContext.PushNestedState($"SyncClock({i}->{peer})"))
         {
-            Logger.Trace("syncing: {NC}", pNodeClock.ValuesToString());
-
             // get all keys from dots missing in the node p
             var missingKeys = new HashSet<Key>();
-            foreach (var n in Context.GetPeerNodes(i).Intersect(Context.GetPeerNodes(p)))
-            foreach (var c in NodeClock[n].Except(pNodeClock[n]))
-                missingKeys.Add(DotKeyMap[(n, c)]);
+            foreach (var n in Context.GetPeerNodes(i).Intersect(Context.GetPeerNodes(peer)))
+                foreach (var c in NodeClock[n].Except(peerNodeClock[n]))
+                    missingKeys.Add(DotKeyMap[(n, c)]);
 
             // get the missing objects from keys replicated by p
             var missingKeyObjects = new List<(Key, Object)>();
             foreach (var k in missingKeys)
             {
-                if (Context.GetReplicaNodes(k).Contains(p))
+                if (Context.GetReplicaNodes(k).Contains(peer))
                     missingKeyObjects.Add((k, Storage[k]));
             }
 
             // remote sync_repair => return results instead of RPC
-            Logger.Trace("returning: {Missing} missing objects for {N}", missingKeyObjects.Count, p);
+            Logger.Trace("comparing {NC}: {Missing} objects for {N}",
+                peerNodeClock.ValuesToString(), missingKeyObjects.Count, peer);
             return (NodeClock, missingKeyObjects);
         }
     }
 
-    private void SyncRepair(NodeId p, Map<NodeId, UpdateIdSet> pNodeClock, List<(Key, Object)> missingObjects)
+    private void SyncRepair(NodeId peer, Map<NodeId, UpdateIdSet> peerNodeClock, List<(Key, Object)> missingObjects)
     {
-        using (ScopeContext.PushNestedState($"SyncRepair({p})"))
+        using (ScopeContext.PushNestedState($"SyncRepair({peer})"))
         {
-            Logger.Trace("applying {NC}: {Missing} objects", pNodeClock.ValuesToString(), missingObjects.Count);
+            Logger.Trace("applying {NC}: {Missing} objects from {N}",
+                peerNodeClock.ValuesToString(), missingObjects.Count, peer);
 
             // update local objects with the missing objects
             foreach (var (k, o) in missingObjects)
-                Update(k, Fill(k, o, pNodeClock));
+                Update(k, Fill(k, o, peerNodeClock));
 
             // merge p's node clock entry to close gaps
-            NodeClock[p].UnionWith(pNodeClock[p]);
+            NodeClock[peer].UnionWith(peerNodeClock[peer]);
 
             // update the WM with new i and p clocks
-            foreach (var n in pNodeClock.Keys.Intersect(Context.GetPeerNodes(i)))
-                Watermark[p][n] = Math.Max(Watermark[p][n], pNodeClock[n].Base);
+            foreach (var n in peerNodeClock.Keys.Intersect(Context.GetPeerNodes(i)))
+                Watermark[peer][n] = Math.Max(Watermark[peer][n], peerNodeClock[n].Base);
 
             foreach (var n in NodeClock.Keys)
                 Watermark[i][n] = Math.Max(Watermark[i][n], NodeClock[n].Base);
@@ -116,7 +101,7 @@ public partial class Node
             }
         }
     }
-    
+
     public (Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects) SyncFifoClock(
         NodeId p, Priority prio, Map<NodeId, UpdateIdSet> pNodeClock)
     {

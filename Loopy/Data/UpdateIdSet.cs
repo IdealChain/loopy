@@ -15,6 +15,12 @@ public class UpdateIdSet
     {
     }
 
+    public UpdateIdSet(int @base, IEnumerable<int> bitmap)
+    {
+        _base = @base;
+        UnionWith(bitmap);
+    }
+
     public UpdateIdSet(params int[] ids)
     {
         UnionWith(ids);

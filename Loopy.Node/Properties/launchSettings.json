@@ -2,7 +2,7 @@
   "profiles": {
     "Loopy.Node": {
       "commandName": "Project",
-      "commandLineArgs": "1 --peers 2"
+      "commandLineArgs": "1 --peers 2 3 4 --launch-peers"
     }
   }
 }

@@ -13,18 +13,18 @@ namespace Loopy;
 /// NC, DKM, WM, NSK, ST
 /// </summary>
 [DebuggerDisplay("Node {Id.Id}")]
-public partial class Node : IClientApi
+public partial class Node
 {
     private NodeId i;
 
     public NodeId Id => i;
-    public ILogger Logger { get; }
+    public Logger Logger { get; }
     public INodeContext Context { get; }
 
     public Node(NodeId id, INodeContext context)
     {
         i = id;
-        Logger = LogManager.GetLogger(id.ToString());
+        Logger = LogManager.GetLogger($"{nameof(Node)}({Id.Id:00})");
         Context = context;
 
         ConsistencyStores[ConsistencyMode.Eventual] = new EventualStore(this);
@@ -72,9 +72,15 @@ public partial class Node : IClientApi
 
     public Object Fetch(Key k, ConsistencyMode mode = ConsistencyMode.Eventual)
     {
-        var modePart = (ConsistencyMode)((int)mode & 0x0F);
-        var prioPart = (Priority)(((int)mode & 0xF0) >> 4);
-        return ConsistencyStores[modePart].Fetch(k, prioPart);
+        using (ScopeContext.PushNestedState($"Fetch({k}, {mode})"))
+        {
+            var modePart = (ConsistencyMode)((int)mode & 0x0F);
+            var prioPart = (Priority)(((int)mode & 0xF0) >> 4);
+            var o = ConsistencyStores[modePart].Fetch(k, prioPart);
+
+            Logger.Trace("fetched [{Fetched}]", o);
+            return o;
+        }
     }
 
     private void Store(Key k, Object o)
@@ -126,15 +132,19 @@ public partial class Node : IClientApi
 
     public Object Update(Key k, Object o)
     {
-        var f = Fetch(k);
-        var m = Merge(o, f);
-        Store(k, m);
+        using (ScopeContext.PushNestedState($"Update({k})"))
+        {
+            var f = ConsistencyStores[ConsistencyMode.Eventual].Fetch(k);
+            var m = Merge(o, f);
+            Store(k, m);
+            Logger.Trace("stored [{Stored}]", m);
 
-        // notify all consistency stores
-        foreach (var cs in ConsistencyStores.Values)
-            cs.CheckMerge(k, m);
-
-        return m;
+            // notify all consistency stores
+            foreach (var cs in ConsistencyStores.Values)
+                cs.CheckMerge(k, m);
+            
+            return m;
+        }
     }
 
     /// <summary>

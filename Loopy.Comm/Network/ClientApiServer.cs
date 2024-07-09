@@ -1,69 +1,72 @@
 using Loopy.Comm.Messages;
 using Loopy.Data;
-using Loopy.Interfaces;
-using NetMQ;
 using NetMQ.Sockets;
+using NLog;
 
 namespace Loopy.Comm.Network;
 
-public class ClientApiServer : IDisposable
+public class ClientApiServer(LocalClientApi node, string host = "*")
 {
     public const ushort Port = 1338;
 
-    private readonly IClientApi _node;
-    private readonly NetMQSocket _netMqSocket;
-
-    public ClientApiServer(IClientApi node, string host = "*")
-    {
-        _node = node;
-        _netMqSocket = new ResponseSocket($"@tcp://{host}:{Port}");
-    }
-
-    public void Dispose()
-    {
-        _netMqSocket.Dispose();
-    }
+    private readonly Logger _logger = LogManager.GetLogger($"{nameof(ClientApiServer)}({node.NodeId})");
+    private RouterSocket? _routerSocket;
 
     public async Task HandleRequests(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            var req = await _netMqSocket.ReceiveMessage(cancellationToken);
-            await Handle((dynamic)req);
+            using (_routerSocket = new RouterSocket($"@tcp://{host}:{Port}"))
+            {
+                _logger.Info("ready ({Host}:{Port})", host, Port);
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    var (request, header) = await _routerSocket.ReceiveMessage(cancellationToken);
+                    using (await node.Lock(cancellationToken))
+                    {
+                        if (await Handle((dynamic)request) is IMessage response)
+                            _routerSocket.SendMessage(response, header);
+                    }
+                }
+            }
+        }
+        catch (Exception e) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.Fatal(e);
+            throw;
         }
     }
 
-    private Task Handle(IMessage _)
+    private Task<IMessage?> Handle(IMessage req)
     {
-        _netMqSocket.SendFrameEmpty(); // fallback: ack with empty frame
-        return Task.CompletedTask;
+        _logger.Warn("unhandled request msg: {Type}", req.GetType());
+        return Task.FromResult<IMessage?>(null);
     }
 
-    private async Task Handle(ClientGetRequest getRequest)
+    private async Task<IMessage?> Handle(ClientGetRequest getRequest)
     {
-        var getResult = await _node.Get(
-            getRequest.Key,
-            getRequest.Quorum.GetValueOrDefault(1),
-            getRequest.Mode.GetValueOrDefault(default));
+        node.ReadQuorum = getRequest.Quorum.GetValueOrDefault(1);
+        node.ConsistencyMode = getRequest.Mode.GetValueOrDefault(default);
 
-        _netMqSocket.SendMessage(new ClientGetResponse
+        var (values, cc) = await node.Get(getRequest.Key);
+        return new ClientGetResponse
         {
-            Values = getResult.values.Select(v => v.Data).ToArray(), CausalContext = getResult.cc,
-        });
+            Values = values.Select(v => v.Data).ToArray(),
+            CausalContext = cc,
+        };
     }
 
-    private async Task Handle(ClientPutRequest putRequest)
+    private async Task<IMessage?> Handle(ClientPutRequest putRequest)
     {
         var cc = CausalContext.Initial;
         if (putRequest.CausalContext != null)
             cc.MergeIn((CausalContext)putRequest.CausalContext);
-        var mode = putRequest.Mode.GetValueOrDefault();
 
         if (putRequest.Value != Value.None)
-            await _node.Put(putRequest.Key, putRequest.Value, cc, mode);
+            await node.Put(putRequest.Key, putRequest.Value, cc);
         else
-            await _node.Delete(putRequest.Key, cc, mode);
+            await node.Delete(putRequest.Key, cc);
 
-        _netMqSocket.SendMessage(new ClientPutResponse { Success = true });
+        return new ClientPutResponse { Success = true };
     }
 }

@@ -1,4 +1,5 @@
 using Loopy.Data;
+using NUnit.Framework;
 
 namespace Loopy.Test.Data;
 
