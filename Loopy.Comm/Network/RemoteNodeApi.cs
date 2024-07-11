@@ -4,7 +4,6 @@ using Loopy.Enums;
 using Loopy.Interfaces;
 using NetMQ.Sockets;
 using System.Diagnostics.CodeAnalysis;
-using Object = Loopy.Data.Object;
 
 namespace Loopy.Comm.Network;
 
@@ -50,51 +49,28 @@ public class RemoteNodeApi : IDisposable, INodeApi
         }
     }
 
-    public async Task<Object> Fetch(Key k, ConsistencyMode mode, CancellationToken cancellationToken = default)
+    public async Task<NdcObject> Fetch(Key k, ConsistencyMode mode, CancellationToken cancellationToken = default)
     {
         var req = new NodeFetchRequest { Key = k.Name, Mode = mode };
         var resp = await _requestSocket.RemoteCall<NodeFetchRequest, NodeFetchResponse>(req, cancellationToken);
-        return resp.Obj ?? new Object();
+        return resp.Obj ?? new NdcObject();
     }
 
-    public async Task<Object> Update(Key k, Object o, CancellationToken cancellationToken = default)
+    public async Task<NdcObject> Update(Key k, NdcObject o, CancellationToken cancellationToken = default)
     {
         var req = new NodeUpdateRequest { Key = k.Name, Obj = o };
         var resp = await _requestSocket.RemoteCall<NodeUpdateRequest, NodeUpdateResponse>(req, cancellationToken);
-        return resp.Obj ?? new Object();
+        return resp.Obj ?? new NdcObject();
     }
 
-    public void SendUpdate(Key k, Object o)
+    public void SendUpdate(Key k, NdcObject o)
     {
         var req = new NodeUpdateRequest { Key = k.Name, Obj = o };
         _dealerSocket.SendMessage(req, new NetMQ.NetMQMessage());
     }
 
-    public async Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncClock(
-        NodeId peer, Map<NodeId, UpdateIdSet> nodeClockPeer, CancellationToken cancellationToken = default)
+    public async Task<SyncResponse> SyncClock(SyncRequest request, CancellationToken cancellationToken = default)
     {
-        var req = new NodeSyncClockRequest
-        {
-            NodeId = peer.Id,
-            NodeClock = nodeClockPeer,
-        };
-        var resp = await _requestSocket.RemoteCall<NodeSyncClockRequest, NodeSyncClockResponse>(req, cancellationToken);
-        var nc = resp.NodeClock ?? new Map<NodeId, UpdateIdSet>();
-        var missingObjs = new List<(Key, Object)>();
-        if (resp.MissingObjects != null)
-            missingObjs.AddRange(resp.MissingObjects.Select(kv => ((Key)kv.Key, (Object)kv.Value)));
-
-        return (nc, missingObjs);
-    }
-
-    public async Task<(Map<NodeId, UpdateIdSet> NodeClock, List<(Key, Object)> missingObjects)> SyncFifoClock(
-        NodeId peer, Priority prio, Map<NodeId, UpdateIdSet> nodeClockPeer, CancellationToken cancellationToken = default)
-    {
-        var nc = new Map<NodeId, UpdateIdSet>();
-        var missingObjs = new List<(Key, Object)>();
-
-        // TODO
-
-        return (nc, missingObjs);
+        return await _requestSocket.RemoteCall<NodeSyncClockRequest, NodeSyncClockResponse>(request, cancellationToken);
     }
 }

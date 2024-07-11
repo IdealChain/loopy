@@ -51,18 +51,13 @@ public class NodeApiServer(LocalNodeApi node, string host = "*")
 
     private async Task<IMessage?> Handle(NodeUpdateRequest updateRequest)
     {
-        var updateResult = await node.Update(updateRequest.Key, updateRequest.Obj ?? new Data.Object());
+        var updateResult = await node.Update(updateRequest.Key, updateRequest.Obj ?? new NdcObject());
         return new NodeUpdateResponse { Obj = updateResult };
     }
 
     private async Task<IMessage?> Handle(NodeSyncClockRequest syncRequest)
     {
-        var (nodeClock, missingObjects) =
-            await node.SyncClock(syncRequest.NodeId, syncRequest.NodeClock ?? new Map<NodeId, UpdateIdSet>());
-        return new NodeSyncClockResponse
-        {
-            NodeClock = nodeClock,
-            MissingObjects = missingObjects.ToDictionary(t => t.Item1.Name, t => (ObjectMsg)t.Item2),
-        };
+        var resp = await node.SyncClock(syncRequest);
+        return (NodeSyncClockResponse)resp;
     }
 }

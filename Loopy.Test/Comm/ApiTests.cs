@@ -51,7 +51,7 @@ public class ApiTests
             Key k = "key";
             Value v = "value";
 
-            var obj = new Loopy.Data.Object();
+            var obj = new NdcObject();
             obj.DotValues[(1, 1)] = v;
 
             try

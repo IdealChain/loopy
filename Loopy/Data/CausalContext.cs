@@ -15,5 +15,5 @@ public class CausalContext : Map<NodeId, int>
 
     public bool Contains(Dot dot) => dot.UpdateId <= this[dot.NodeId];
 
-    public override string ToString() => this.ValuesToString();
+    public override string ToString() => this.AsCsv();
 }

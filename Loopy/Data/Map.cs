@@ -17,7 +17,7 @@ public class Map<TKey, TValue> : Dictionary<TKey, TValue>
         : base(dists ?? Enumerable.Empty<KeyValuePair<TKey, TValue>>())
     {
     }
-    
+
     public new TValue this[TKey key]
     {
         get

@@ -16,7 +16,7 @@ public class NodeFetchRequest : IMessage
 [ProtoContract]
 public class NodeFetchResponse : IMessage
 {
-    [ProtoMember(1)] public required ObjectMsg? Obj { get; set; }
+    [ProtoMember(1)] public required NdcObjectMsg? Obj { get; set; }
 }
 
 [RpcMessage(RpcOperation.NodeUpdate, RpcDirection.Request)]
@@ -24,14 +24,14 @@ public class NodeFetchResponse : IMessage
 public class NodeUpdateRequest : IMessage
 {
     [ProtoMember(1)] public required string Key { get; set; }
-    [ProtoMember(2)] public required ObjectMsg? Obj { get; set; }
+    [ProtoMember(2)] public required NdcObjectMsg? Obj { get; set; }
 }
 
 [RpcMessage(RpcOperation.NodeUpdate, RpcDirection.Response)]
 [ProtoContract]
 public class NodeUpdateResponse : IMessage
 {
-    [ProtoMember(1)] public required ObjectMsg? Obj { get; set; }
+    [ProtoMember(1)] public required NdcObjectMsg? Obj { get; set; }
 }
 
 [RpcMessage(RpcOperation.NodeSyncClock, RpcDirection.Request)]
@@ -39,15 +39,53 @@ public class NodeUpdateResponse : IMessage
 public class NodeSyncClockRequest : IMessage
 {
     [ProtoMember(1)] public required int NodeId { get; set; }
-    [ProtoMember(2)] public required NodeClockMsg? NodeClock { get; set; }
+    [ProtoMember(2)] public required List<(ConsistencyMode mode, NodeClockMsg clock)>? NodeClocks { get; set; }
+
+    public static implicit operator NodeSyncClockRequest(SyncRequest req)
+    {
+        return new NodeSyncClockRequest
+        {
+            NodeId = req.Peer.Id,
+            NodeClocks = req.Select(kv => (kv.Key, (NodeClockMsg)kv.Value)).ToList()
+        };
+    }
+
+    public static implicit operator SyncRequest(NodeSyncClockRequest msg)
+    {
+        var req = new SyncRequest { Peer = msg.NodeId };
+
+        if (msg.NodeClocks != null)
+            req.MergeIn(msg.NodeClocks.Select(t => (t.mode, (NodeClock)t.clock)));
+
+        return req;
+    }
 }
 
 [RpcMessage(RpcOperation.NodeSyncClock, RpcDirection.Response)]
 [ProtoContract]
 public class NodeSyncClockResponse : IMessage
 {
-    [ProtoMember(1)] public required NodeClockMsg? NodeClock { get; set; }
-    [ProtoMember(2)] public required Dictionary<string, ObjectMsg>? MissingObjects { get; set; }
+    [ProtoMember(1)] public required int NodeId { get; set; }
+    [ProtoMember(2)] public required List<(ConsistencyMode mode, NodeClockMsg clock, NdcObjectsMsg missingObjects)>? NodeResponse { get; set; }
+
+    public static implicit operator NodeSyncClockResponse(SyncResponse rep)
+    {
+        return new NodeSyncClockResponse
+        {
+            NodeId = rep.Peer.Id,
+            NodeResponse = rep.Select(kv => (kv.Key, (NodeClockMsg)kv.Value.clock, (NdcObjectsMsg)kv.Value.missingObjects)).ToList()
+        };
+    }
+
+    public static implicit operator SyncResponse(NodeSyncClockResponse msg)
+    {
+        var req = new SyncResponse { Peer = msg.NodeId };
+
+        if (msg.NodeResponse != null)
+            req.MergeIn(msg.NodeResponse.Select(t => (t.mode, ((NodeClock)t.clock, (List<(Key, NdcObject)>)t.missingObjects))));
+
+        return req;
+    }
 }
 
 [ProtoContract]
@@ -55,7 +93,7 @@ public class NodeClockMsg
 {
     [ProtoMember(1)] public required List<(int node, int @base, int[] bitmap)>? NodeClock { get; set; }
 
-    public static implicit operator NodeClockMsg(Map<NodeId, UpdateIdSet> nc)
+    public static implicit operator NodeClockMsg(NodeClock nc)
     {
         return new NodeClockMsg
         {
@@ -63,27 +101,27 @@ public class NodeClockMsg
         };
     }
 
-    public static implicit operator Map<NodeId, UpdateIdSet>(NodeClockMsg msg)
+    public static implicit operator NodeClock(NodeClockMsg msg)
     {
-        var nc = new Map<NodeId, UpdateIdSet>();
+        var nc = new NodeClock();
 
         if (msg.NodeClock != null)
-            nc.MergeIn(msg.NodeClock.Select(kv => ((NodeId)kv.node, new UpdateIdSet(kv.@base, kv.bitmap ?? Enumerable.Empty<int>()))));
+            nc.MergeIn(msg.NodeClock.Select(t => ((NodeId)t.node, new UpdateIdSet(t.@base, t.bitmap ?? Enumerable.Empty<int>()))));
 
         return nc;
     }
 }
 
 [ProtoContract]
-public class ObjectMsg
+public class NdcObjectMsg
 {
     [ProtoMember(1)] public required List<(int node, int update, string value)>? DotValues { get; set; }
     [ProtoMember(2)] public required List<(int node, int update, FifoDistancesMsg fd)>? FifoDistances { get; set; }
     [ProtoMember(3)] public required CausalContextMsg? CausalContext { get; set; }
 
-    public static implicit operator ObjectMsg(Data.Object obj)
+    public static implicit operator NdcObjectMsg(NdcObject obj)
     {
-        return new ObjectMsg
+        return new NdcObjectMsg
         {
             DotValues = obj.DotValues.Select(kv =>
                 (kv.Key.NodeId.Id, kv.Key.UpdateId, kv.Value.Data)).ToList(),
@@ -93,9 +131,9 @@ public class ObjectMsg
         };
     }
 
-    public static implicit operator Data.Object(ObjectMsg msg)
+    public static implicit operator NdcObject(NdcObjectMsg msg)
     {
-        var obj = new Data.Object();
+        var obj = new NdcObject();
 
         if (msg.DotValues != null)
             obj.DotValues.MergeIn(msg.DotValues.Select(t => (new Dot(t.node, t.update), (Value)t.value)));
@@ -107,6 +145,30 @@ public class ObjectMsg
             obj.CausalContext.MergeIn((CausalContext)msg.CausalContext);
 
         return obj;
+    }
+}
+
+[ProtoContract]
+public class NdcObjectsMsg()
+{
+    [ProtoMember(1)] public required List<(string key, NdcObjectMsg obj)>? Objects { get; set; }
+
+    public static implicit operator NdcObjectsMsg(List<(Key key, NdcObject obj)> objs)
+    {
+        return new NdcObjectsMsg
+        {
+            Objects = objs.Select(kv => (kv.key.Name, (NdcObjectMsg)kv.obj)).ToList(),
+        };
+    }
+
+    public static implicit operator List<(Key, NdcObject)>(NdcObjectsMsg msg)
+    {
+        var objs = new List<(Key, NdcObject)>();
+
+        if (msg.Objects != null)
+            objs.AddRange(msg.Objects.Select(t => ((Key)t.key, (NdcObject)t.obj)));
+
+        return objs;
     }
 }
 
@@ -134,11 +196,11 @@ public class CausalContextMsg
 [ProtoContract]
 public class FifoDistancesMsg
 {
-    [ProtoMember(1)] public List<(Priority prio, int dist)>? FifoDistances { get; set; }
+    [ProtoMember(1)] public List<(int prio, int dist)>? FifoDistances { get; set; }
 
     public static implicit operator FifoDistancesMsg(FifoDistances fd)
     {
-        return new FifoDistancesMsg { FifoDistances = fd.Select(kv => (kv.Key, kv.Value)).ToList() };
+        return new FifoDistancesMsg { FifoDistances = fd.Select(kv => ((int)kv.Key, kv.Value)).ToList() };
     }
 
     public static implicit operator FifoDistances(FifoDistancesMsg msg)
@@ -146,7 +208,7 @@ public class FifoDistancesMsg
         var fd = new FifoDistances();
 
         if (msg.FifoDistances != null)
-            fd.MergeIn(msg.FifoDistances.Select(t => (t.prio, t.dist)));
+            fd.MergeIn(msg.FifoDistances.Select(t => ((Priority)t.prio, t.dist)));
 
         return fd;
     }

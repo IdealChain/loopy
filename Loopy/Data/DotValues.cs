@@ -13,5 +13,5 @@ public class DotValues : Map<Dot, Value>
     {
     }
 
-    public override string ToString() => this.ValuesToString();
+    public override string ToString() => this.AsCsv();
 }

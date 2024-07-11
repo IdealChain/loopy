@@ -39,13 +39,13 @@ public class FifoDistances : Map<Priority, int>
     /// <summary>
     /// Gets the range of update IDs this update can FIFO skip for the given priority
     /// </summary>
-    public IEnumerable<int> GetSkippedUpdateIds(Priority prio, int updateId)
+    public IEnumerable<int> GetSkippableUpdateIds(Priority prio, int updateId)
     {
         for (int i = GetPredecessorId(prio, updateId) + 1; i < updateId; i++)
             yield return i;
     }
 
-    public override string ToString() => this.ValuesToString();
+    public override string ToString() => this.AsCsv();
 
     public FifoDistances Strip()
     {

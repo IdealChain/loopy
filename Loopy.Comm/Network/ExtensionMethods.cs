@@ -30,7 +30,7 @@ namespace Loopy.Comm.Network
             return (msg, header);
         }
 
-        public static void SendMessage<TMsg>(this NetMQSocket socket, TMsg msg, NetMQMessage? header = null)
+        public static bool SendMessage<TMsg>(this NetMQSocket socket, TMsg msg, NetMQMessage? header = null)
             where TMsg : IMessage
         {
             var mq = new NetMQMessage(header ?? Enumerable.Empty<NetMQFrame>());
@@ -40,7 +40,7 @@ namespace Loopy.Comm.Network
                 mq.AppendEmptyFrame();
 
             MessageSerializer.Serialize(mq, msg);
-            socket.SendMultipartMessage(mq);
+            return socket.TrySendMultipartMessage(mq);
         }
 
         public static async Task<TResp> RemoteCall<TReq, TResp>(this RequestSocket socket, TReq msg, CancellationToken token)

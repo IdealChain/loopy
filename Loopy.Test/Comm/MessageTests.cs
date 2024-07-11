@@ -26,7 +26,7 @@ public class MessageTests
             yield return new NodeFetchRequest { Key = "key", Mode = ConsistencyMode.Fifo };
             yield return new NodeFetchResponse
             {
-                Obj = new ObjectMsg
+                Obj = new NdcObjectMsg
                 {
                     DotValues = new() { (0, 0, "value") },
                     FifoDistances = new() { (0, 0, new FifoDistancesMsg()) },

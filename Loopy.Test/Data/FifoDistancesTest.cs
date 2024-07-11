@@ -62,10 +62,10 @@ namespace Loopy.Test.Data
 
             var f = new FifoDistances(p, 1000);
             
-            Assert.That(f.GetSkippedUpdateIds(Priority.P0, 1000), Is.Empty);
-            Assert.That(f.GetSkippedUpdateIds(Priority.P1, 1000), Is.EqualTo(new[] { 997, 998, 999 }));
-            Assert.That(f.GetSkippedUpdateIds(Priority.P2, 1000), Is.EqualTo(new[] { 997, 998, 999 }));
-            Assert.That(f.GetSkippedUpdateIds(Priority.P3, 1000), Is.EqualTo(new[] { 993, 994, 995, 996, 997, 998, 999 }));
+            Assert.That(f.GetSkippableUpdateIds(Priority.P0, 1000), Is.Empty);
+            Assert.That(f.GetSkippableUpdateIds(Priority.P1, 1000), Is.EqualTo(new[] { 997, 998, 999 }));
+            Assert.That(f.GetSkippableUpdateIds(Priority.P2, 1000), Is.EqualTo(new[] { 997, 998, 999 }));
+            Assert.That(f.GetSkippableUpdateIds(Priority.P3, 1000), Is.EqualTo(new[] { 993, 994, 995, 996, 997, 998, 999 }));
         }
     }
 }

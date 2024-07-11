@@ -13,7 +13,7 @@ namespace Loopy.Enums
         P1 = 1,
         
         /// <summary>
-        /// NOrmal
+        /// Normal
         /// </summary>
         P2 = 2,
         

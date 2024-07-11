@@ -1,0 +1,4 @@
+*.cs     text eol=lf
+*.sh     text eol=lf
+*.csproj text merge=union
+*.sln    text merge=union eol=crlf

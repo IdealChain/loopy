@@ -82,7 +82,7 @@ public class ConsistencyTests
         var n1 = c.GetClientApi(1, ConsistencyMode.Fifo);
         var n1NR = c.GetClientApi(1, ConsistencyMode.Fifo, []);
         var n2All = c.GetClientApi(2, ConsistencyMode.Fifo);
-        var n2High = c.GetClientApi(2, ConsistencyMode.FifoHigh);
+        var n2High = c.GetClientApi(2, ConsistencyMode.FifoP3);
 
         // N1: initialize x=y=z=0
         await n1.Put(x, 0);
