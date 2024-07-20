@@ -51,18 +51,16 @@ public class ClientApiServer(LocalClientApi node, string host = "*")
         var (values, cc) = await node.Get(getRequest.Key);
         return new ClientGetResponse
         {
-            Values = values.Select(v => v.Data).ToArray(),
+            Values = values.Where(v => !v.IsEmpty).Select(v => v.Data ?? string.Empty).ToArray(),
             CausalContext = cc,
         };
     }
 
     private async Task<IMessage?> Handle(ClientPutRequest putRequest)
     {
-        var cc = CausalContext.Initial;
-        if (putRequest.CausalContext != null)
-            cc.MergeIn((CausalContext)putRequest.CausalContext);
+        var cc = (CausalContext?)putRequest.CausalContext;
 
-        if (putRequest.Value != Value.None)
+        if (putRequest.Value != null)
             await node.Put(putRequest.Key, putRequest.Value, cc);
         else
             await node.Delete(putRequest.Key, cc);

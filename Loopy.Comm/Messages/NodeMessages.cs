@@ -101,11 +101,11 @@ public class NodeClockMsg
         };
     }
 
-    public static implicit operator NodeClock(NodeClockMsg msg)
+    public static implicit operator NodeClock(NodeClockMsg? msg)
     {
         var nc = new NodeClock();
 
-        if (msg.NodeClock != null)
+        if (msg?.NodeClock != null)
             nc.MergeIn(msg.NodeClock.Select(t => ((NodeId)t.node, new UpdateIdSet(t.@base, t.bitmap ?? Enumerable.Empty<int>()))));
 
         return nc;
@@ -115,33 +115,27 @@ public class NodeClockMsg
 [ProtoContract]
 public class NdcObjectMsg
 {
-    [ProtoMember(1)] public required List<(int node, int update, string value)>? DotValues { get; set; }
-    [ProtoMember(2)] public required List<(int node, int update, FifoDistancesMsg fd)>? FifoDistances { get; set; }
-    [ProtoMember(3)] public required CausalContextMsg? CausalContext { get; set; }
+    [ProtoMember(1)] public required List<(int node, int update, string? value, int[]? fds)>? DotValues { get; set; }
+    [ProtoMember(2)] public required CausalContextMsg? CausalContext { get; set; }
 
     public static implicit operator NdcObjectMsg(NdcObject obj)
     {
         return new NdcObjectMsg
         {
             DotValues = obj.DotValues.Select(kv =>
-                (kv.Key.NodeId.Id, kv.Key.UpdateId, kv.Value.Data)).ToList(),
-            FifoDistances = obj.FifoDistances.Select(kv =>
-                (kv.Key.NodeId.Id, kv.Key.UpdateId, (FifoDistancesMsg)kv.Value)).ToList(),
+            (kv.Key.NodeId.Id, kv.Key.UpdateId, kv.Value.value.Data, kv.Value.fifoDistances)).ToList(),
             CausalContext = obj.CausalContext,
         };
     }
 
-    public static implicit operator NdcObject(NdcObjectMsg msg)
+    public static implicit operator NdcObject(NdcObjectMsg? msg)
     {
         var obj = new NdcObject();
 
-        if (msg.DotValues != null)
-            obj.DotValues.MergeIn(msg.DotValues.Select(t => (new Dot(t.node, t.update), (Value)t.value)));
+        if (msg?.DotValues != null)
+            obj.DotValues.MergeIn(msg.DotValues.Select(t => (new Dot(t.node, t.update), ((Value)t.value, t.fds ?? []))));
 
-        if (msg.FifoDistances != null)
-            obj.FifoDistances.MergeIn(msg.FifoDistances.Select(t => (new Dot(t.node, t.update), (FifoDistances)t.fd)));
-
-        if (msg.CausalContext != null)
+        if (msg?.CausalContext != null)
             obj.CausalContext.MergeIn((CausalContext)msg.CausalContext);
 
         return obj;
@@ -161,11 +155,11 @@ public class NdcObjectsMsg()
         };
     }
 
-    public static implicit operator List<(Key, NdcObject)>(NdcObjectsMsg msg)
+    public static implicit operator List<(Key, NdcObject)>(NdcObjectsMsg? msg)
     {
         var objs = new List<(Key, NdcObject)>();
 
-        if (msg.Objects != null)
+        if (msg?.Objects != null)
             objs.AddRange(msg.Objects.Select(t => ((Key)t.key, (NdcObject)t.obj)));
 
         return objs;
@@ -182,34 +176,13 @@ public class CausalContextMsg
         return new CausalContextMsg { CausalContext = cc.Select(kv => (kv.Key.Id, kv.Value)).ToList() };
     }
 
-    public static implicit operator CausalContext(CausalContextMsg msg)
+    public static implicit operator CausalContext(CausalContextMsg? msg)
     {
         var cc = new CausalContext();
 
-        if (msg.CausalContext != null)
+        if (msg?.CausalContext != null)
             cc.MergeIn(msg.CausalContext.Select(t => ((NodeId)t.node, t.update)));
 
         return cc;
-    }
-}
-
-[ProtoContract]
-public class FifoDistancesMsg
-{
-    [ProtoMember(1)] public List<(int prio, int dist)>? FifoDistances { get; set; }
-
-    public static implicit operator FifoDistancesMsg(FifoDistances fd)
-    {
-        return new FifoDistancesMsg { FifoDistances = fd.Select(kv => ((int)kv.Key, kv.Value)).ToList() };
-    }
-
-    public static implicit operator FifoDistances(FifoDistancesMsg msg)
-    {
-        var fd = new FifoDistances();
-
-        if (msg.FifoDistances != null)
-            fd.MergeIn(msg.FifoDistances.Select(t => ((Priority)t.prio, t.dist)));
-
-        return fd;
     }
 }

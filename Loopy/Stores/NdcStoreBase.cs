@@ -44,8 +44,6 @@ internal abstract class NdcStoreBase : INdcStore
     /// </summary>
     protected readonly Map<Key, NdcObject> Storage = new();
 
-    public string Stats => $"NC: {NodeClock.AsCsv()}, DKM: {DotKeyMap.Keys.AsCsv()}, NSK: {NonStrippedKeys.AsCsv()}";
-
     public NdcObject Fetch(Key k)
     {
         if (!Storage.TryGetValue(k, out var obj) || obj.IsEmpty)

@@ -19,11 +19,6 @@ public interface IClientApi
     ConsistencyMode ConsistencyMode { get; set; }
 
     /// <summary>
-    /// Causal context returned from last query
-    /// </summary>
-    CausalContext CausalContext { get; set; }
-
-    /// <summary>
     /// Fetches the given key from quorum replicas and
     /// returns all concurrent values along with the causal context 
     /// </summary>

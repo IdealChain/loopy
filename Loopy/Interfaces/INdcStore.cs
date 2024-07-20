@@ -13,6 +13,4 @@ internal interface INdcStore
     (NodeClock clock, List<(Key, NdcObject)> missingObjects) SyncClock(NodeId peer, NodeClock peerClock);
 
     void SyncRepair(NodeId peer, NodeClock peerClock, List<(Key, NdcObject)> missingObjects);
-
-    string Stats { get; }
 }

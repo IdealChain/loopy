@@ -2,7 +2,6 @@ using Loopy.Data;
 using Loopy.Enums;
 using Loopy.Interfaces;
 using NLog;
-using System.Runtime.CompilerServices;
 
 namespace Loopy.Stores;
 
@@ -36,9 +35,10 @@ internal class FifoStore : NdcStoreBase, INdcStore
         }
 
         // group dots into immediately applicable (no gaps) and pending (gaps) sets, ignoring already applied ones
-        var applicableDots = o.DotValues.Keys
-            .Where(d => !NodeClock[d.NodeId].Contains(d.UpdateId))
-            .ToLookup(d => NodeClock[d.NodeId].Base >= o.FifoDistances[d].GetPredecessorId(_minPrio, d.UpdateId));
+        var applicableDots = o.DotValues
+            .Where(dv => !NodeClock[dv.Key.NodeId].Contains(dv.Key.UpdateId))
+            .ToLookup(dv => NodeClock[dv.Key.NodeId].Base >= dv.GetFifoPredecessor(_minPrio),
+                      dv => dv.Key);
 
         // short circuit the common case of no gaps: we can apply immediately, just as in the eventual store
         if (!applicableDots[false].Any())
@@ -75,7 +75,7 @@ internal class FifoStore : NdcStoreBase, INdcStore
             foreach (var (u, (k, o)) in p)
             {
                 var d = new Dot(n, u);
-                if (NodeClock[d.NodeId].Base >= o.FifoDistances[d].GetPredecessorId(_minPrio, u))
+                if (NodeClock[d.NodeId].Base >= o.DotValues[d].fifoDistances.GetFifoPredecessor(d.UpdateId, _minPrio))
                 {
                     _node.Logger.Trace("Merging [no fifo gap]: {Dot}={Value}", d, o.DotValues[d]);
                     Update(k, o);
@@ -97,11 +97,10 @@ internal class FifoStore : NdcStoreBase, INdcStore
     protected override void Store(Key k, NdcObject o)
     {
         // fill in update IDs that are allowed to be skipped
-        foreach (var d in o.DotValues.Keys)
-            NodeClock[d.NodeId].UnionWith(o.FifoDistances[d].GetSkippableUpdateIds(_minPrio, d.UpdateId));
+        foreach (var dv in o.DotValues)
+            NodeClock[dv.Key.NodeId].UnionWith(dv.GetFifoSkippableUpdates(_minPrio));
 
         base.Store(k, o);
-
     }
 
     protected override NdcObject Update(Key k, NdcObject o)

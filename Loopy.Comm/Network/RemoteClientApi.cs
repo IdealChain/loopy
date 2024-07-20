@@ -44,6 +44,10 @@ public class RemoteClientApi : IDisposable, IClientApi
 
     public int ReadQuorum { get; set; } = 1;
     public ConsistencyMode ConsistencyMode { get; set; } = ConsistencyMode.Eventual;
+
+    /// <summary>
+    /// Causal context resulting from all queries issued so far
+    /// </summary>
     public CausalContext CausalContext { get; set; } = CausalContext.Initial;
 
     public async Task<(Value[] values, CausalContext cc)> Get(Key k, CancellationToken cancellationToken = default)
@@ -56,12 +60,20 @@ public class RemoteClientApi : IDisposable, IClientApi
         };
 
         var resp = await _requestSocket.RemoteCall<ClientGetRequest, ClientGetResponse>(req, cancellationToken);
-        var values = Array.Empty<Value>();
+
+        Value[]? values = null;
+        CausalContext? cc = null;
+
         if (resp.Values != null && resp.Values.Length > 0)
             values = resp.Values.Select(v => new Value(v)).ToArray();
 
-        CausalContext = resp.CausalContext;
-        return (values, CausalContext);
+        if (resp.CausalContext != null)
+        {
+            cc = resp.CausalContext;
+            CausalContext.MergeIn(cc, Math.Max);
+        }
+
+        return (values ?? [], cc ?? CausalContext.Initial);
     }
 
     public async Task Put(Key k, Value v, CausalContext? cc = default, CancellationToken cancellationToken = default)
@@ -75,11 +87,20 @@ public class RemoteClientApi : IDisposable, IClientApi
 
         var resp = await _requestSocket.RemoteCall<ClientPutRequest, ClientPutResponse>(req, cancellationToken);
         if (!resp.Success)
-            throw new InvalidOperationException();
+            throw new InvalidOperationException("Put operation failed");
     }
 
-    public Task Delete(Key k, CausalContext? cc = default, CancellationToken cancellationToken = default)
+    public async Task Delete(Key k, CausalContext? cc = default, CancellationToken cancellationToken = default)
     {
-        return Put(k, Value.None, cc, cancellationToken);
+        var req = new ClientPutRequest
+        {
+            Key = k.Name,
+            Value = null,
+            CausalContext = cc ?? CausalContext,
+        };
+
+        var resp = await _requestSocket.RemoteCall<ClientPutRequest, ClientPutResponse>(req, cancellationToken);
+        if (!resp.Success)
+            throw new InvalidOperationException("Put operation failed");
     }
 }

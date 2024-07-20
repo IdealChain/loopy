@@ -10,11 +10,16 @@ namespace Loopy
 
         public TimeSpan StripInterval { get; set; } = TimeSpan.FromSeconds(90);
 
-        private TimeSpan RandomJitter() => TimeSpan.FromMilliseconds(Random.Shared.Next(5000));
+        public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+        private TimeSpan RandomJitter() => TimeSpan.FromMilliseconds(Random.Shared.Next(3000));
 
         public async Task Run(CancellationToken cancellationToken = default)
         {
-            await Task.WhenAll(PeriodicAntiEntropy(cancellationToken), PeriodicStripCausality(cancellationToken));
+            await Task.WhenAll(
+                PeriodicAntiEntropy(cancellationToken),
+                PeriodicStripCausality(cancellationToken),
+                PeriodicHeartbeat(cancellationToken));
         }
 
         public async Task PeriodicAntiEntropy(CancellationToken cancellationToken)
@@ -74,6 +79,28 @@ namespace Loopy
             catch (Exception e) when (!cancellationToken.IsCancellationRequested)
             {
                 node.Logger.Warn("strip causality failed: {Message}", e.Message);
+            }
+        }
+
+        public async Task PeriodicHeartbeat(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(HeartbeatInterval + RandomJitter(), cancellationToken);
+                await Heartbeat(cancellationToken);
+            }
+        }
+
+        public async Task Heartbeat(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                using (await node.NodeLock.EnterAsync(cancellationToken))
+                    await node.Heartbeat(1.5 * HeartbeatInterval);
+            }
+            catch (Exception e) when (!cancellationToken.IsCancellationRequested)
+            {
+                node.Logger.Warn("heartbeat failed: {Message}", e.Message);
             }
         }
     }

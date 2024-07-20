@@ -51,7 +51,7 @@ public class NodeApiServer(LocalNodeApi node, string host = "*")
 
     private async Task<IMessage?> Handle(NodeUpdateRequest updateRequest)
     {
-        var updateResult = await node.Update(updateRequest.Key, updateRequest.Obj ?? new NdcObject());
+        var updateResult = await node.Update(updateRequest.Key, updateRequest.Obj);
         return new NodeUpdateResponse { Obj = updateResult };
     }
 

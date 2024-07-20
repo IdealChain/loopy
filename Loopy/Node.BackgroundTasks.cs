@@ -1,4 +1,5 @@
 using Loopy.Data;
+using Loopy.Enums;
 using NLog;
 using System.Diagnostics;
 
@@ -32,10 +33,7 @@ public partial class Node
 
         // 3. merge received peer clocks and missing objects
         foreach (var (m, s) in Stores)
-        {
             s.SyncRepair(response.Peer, response[m].clock, response[m].missingObjects);
-            Logger.Trace("applied {Mode}: {Stats}", m, s.Stats);
-        }
     }
 
     internal SyncResponse SyncClock(SyncRequest request)
@@ -54,5 +52,25 @@ public partial class Node
 
         // remote sync_repair => return results instead of RPC
         return response;
+    }
+
+    public async Task Heartbeat(TimeSpan tolerance, CancellationToken cancellationToken = default)
+    {
+        using var _ = ScopeContext.PushNestedState($"Heartbeat()");
+
+        var ts = DateTimeOffset.Now;
+        foreach(var p in FifoExtensions.Priorities)
+            await Put($"{p}_{Id}", ts.ToString(), cancellationToken: cancellationToken);
+
+        foreach(var n in Context.GetPeerNodes(Id).Where(n => n != Id))
+        {
+            var result = await Get(n.ToString(), mode: Enums.ConsistencyMode.Fifo, cancellationToken: cancellationToken);
+            if (result.values.Length == 1 &&
+                DateTimeOffset.TryParse(result.values[0].Data, out var last) &&
+                ts - last > tolerance)
+            {
+                Logger.Warn("not heard from {Node} for {Age}", n, ts - last);
+            }
+        }
     }
 }

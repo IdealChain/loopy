@@ -27,10 +27,10 @@ public class DictionaryExtensionsTests
     [Test]
     public void TestMergeInConflict()
     {
-        int MaxResolver(int k, int v1, int v2)
+        int MaxResolver(int v1, int v2)
         {
             var r = Math.Max(v1, v2);
-            TestContext.Out.WriteLine($"Resolving {k} conflict with {r} ({v1}:{v2})");
+            TestContext.Out.WriteLine($"Resolving conflict with {r} ({v1}:{v2})");
             return r;
         }
 

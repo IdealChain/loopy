@@ -28,9 +28,8 @@ public class MessageTests
             {
                 Obj = new NdcObjectMsg
                 {
-                    DotValues = new() { (0, 0, "value") },
-                    FifoDistances = new() { (0, 0, new FifoDistancesMsg()) },
-                    CausalContext = new() { CausalContext = new() { (0, 0) } },
+                    DotValues = [(0, 0, "value", [1, 1, 1, 1])],
+                    CausalContext = new() { CausalContext = [(0, 0)] },
                 }
             };
         }

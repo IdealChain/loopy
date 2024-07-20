@@ -7,21 +7,19 @@ namespace Loopy.Data;
 /// </summary>
 public class NdcObject
 {
-    public NdcObject() : this(null, null, null)
+    public NdcObject() : this(null, null)
     { }
 
-    public NdcObject(DotValues? vers, CausalContext? cc, Map<Dot, FifoDistances>? fd)
+    public NdcObject(DotValues? vers, CausalContext? cc)
     {
         DotValues = vers != null ? new(vers) : new();
         CausalContext = cc != null ? new(cc) : new();
-        FifoDistances = fd != null ? new(fd) : new();
     }
 
     public DotValues DotValues { get; init; }
     public CausalContext CausalContext { get; init; }
-    public Map<Dot, FifoDistances> FifoDistances { get; init; }
-    public bool IsEmpty => DotValues.All(kv => kv.Value.IsEmpty);
-    public override string ToString() => $"{DotValues} / CC: {CausalContext} / FD: {FifoDistances.AsCsv()}";
+    public bool IsEmpty => DotValues.Values.All(kv => kv.value.IsEmpty);
+    public override string ToString() => $"{DotValues} / CC: {CausalContext}";
 
     /// <summary>
     /// Merges the given object, i.e., add in new version values and remove obsoleted old version values
@@ -38,14 +36,9 @@ public class NdcObject
         o.DotValues.MergeIn(o1.DotValues.Where(p => !o2.CausalContext.Contains(p.Key)));
         o.DotValues.MergeIn(o2.DotValues.Where(p => !o1.CausalContext.Contains(p.Key)));
 
-        // same for fifo distances
-        o.FifoDistances.MergeIn(o1.FifoDistances.IntersectBy(o2.FifoDistances.Keys, p => p.Key));
-        o.FifoDistances.MergeIn(o1.FifoDistances.Where(p => !o2.CausalContext.Contains(p.Key)));
-        o.FifoDistances.MergeIn(o2.FifoDistances.Where(p => !o1.CausalContext.Contains(p.Key)));
-
         // merged causal context: taking the maximum counter for common node ids
         o.CausalContext.MergeIn(o1.CausalContext);
-        o.CausalContext.MergeIn(o2.CausalContext, (_, c1, c2) => Math.Max(c1, c2));
+        o.CausalContext.MergeIn(o2.CausalContext, Math.Max);
 
         return o;
     }
@@ -57,7 +50,6 @@ public class NdcObject
     {
         var s = new NdcObject();
         s.DotValues.MergeIn(dots.Select(d => (d, DotValues[d])));
-        s.FifoDistances.MergeIn(dots.Select(d => (d, FifoDistances[d])));
         s.CausalContext.MergeIn(CausalContext);
         return s;
     }
@@ -67,7 +59,7 @@ public class NdcObject
     /// </summary>
     internal NdcObject Strip(NodeClock nc)
     {
-        var s = new NdcObject(DotValues, CausalContext, FifoDistances);
+        var s = new NdcObject(DotValues, CausalContext);
 
         foreach (var n in nc.Keys)
         {
@@ -83,7 +75,7 @@ public class NdcObject
     /// </summary>
     internal NdcObject Fill(NodeClock nc, IEnumerable<NodeId> replicaNodes)
     {
-        var f = new NdcObject(DotValues, CausalContext, FifoDistances);
+        var f = new NdcObject(DotValues, CausalContext);
 
         foreach (var n in replicaNodes)
             f.CausalContext[n] = Math.Max(f.CausalContext[n], nc[n].Base);

@@ -52,15 +52,15 @@ public class ApiTests
             Value v = "value";
 
             var obj = new NdcObject();
-            obj.DotValues[(1, 1)] = v;
+            obj.DotValues[(1, 1)] = (v, []);
 
             try
             {
                 var updateResult = await client.Update(k, obj);
-                Assert.That(updateResult.DotValues.Values, Does.Contain(v));
+                Assert.That(updateResult.DotValues.Values.Select(v => v.value), Does.Contain(v));
 
                 var fetchResult = await client.Fetch(k, default);
-                Assert.That(fetchResult.DotValues.Values, Does.Contain(v));
+                Assert.That(fetchResult.DotValues.Values.Select(v => v.value), Does.Contain(v));
             }
             catch (TaskCanceledException e)
             {

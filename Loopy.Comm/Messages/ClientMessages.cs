@@ -25,7 +25,7 @@ public class ClientGetResponse : IMessage
 public class ClientPutRequest : IMessage
 {
     [ProtoMember(1)] public required string Key { get; set; }
-    [ProtoMember(2)] public required string Value { get; set; }
+    [ProtoMember(2)] public required string? Value { get; set; }
     [ProtoMember(3)] public CausalContextMsg? CausalContext { get; set; }
 }
 

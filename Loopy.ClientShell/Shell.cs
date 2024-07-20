@@ -129,7 +129,7 @@ internal class Shell
     private async Task<string> Get(string key, CancellationToken cancellationToken)
     {
         var (values, cc) = await _remoteClient.Get(key, cancellationToken: cancellationToken);
-        return values.Length > 0 ? string.Join(", ", values) : "Empty";
+        return values.Length > 0 ? values.AsCsv() : "Empty";
     }
 
     private async Task<string> Put(string key, string value, CancellationToken cancellationToken)
@@ -144,16 +144,9 @@ internal class Shell
         return "OK";
     }
 
-    private void SetConsistency(ConsistencyMode mode)
-    {
-        _remoteClient.ConsistencyMode = mode;
-        _remoteClient.CausalContext = CausalContext.Initial;
-    }
+    private void SetConsistency(ConsistencyMode mode) => _remoteClient.ConsistencyMode = mode;
 
-    private void SetQuorum(int quorum)
-    {
-        _remoteClient.ReadQuorum = quorum;
-    }
+    private void SetQuorum(int quorum) => _remoteClient.ReadQuorum = quorum;
 
     private void ShowCausalContext()
     {
