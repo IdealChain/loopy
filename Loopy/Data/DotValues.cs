@@ -13,7 +13,5 @@ public class DotValues : Map<Dot, (Value value, int[] fifoDistances)>
     {
     }
 
-    public override string ToString() => this
-        .Select(kv => $"{kv.Key}={kv.Value.value} (FD: {kv.Value.fifoDistances.AsCsv()})")
-        .AsCsv();
+    public override string ToString() => this.AsCsv(kv => $"{kv.Key}={kv.Value.value}");
 }

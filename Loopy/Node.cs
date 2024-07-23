@@ -54,7 +54,6 @@ public partial class Node
         using var _ = ScopeContext.PushNestedState($"Update({k})");
 
         var m = EventualStore.Update(k, o);
-        Logger.Trace("stored [{Stored}]", m);
 
         // afterwards, allow all the FIFO stores to apply or cache any updates
         foreach (var cs in Stores.Values.OfType<FifoStore>())

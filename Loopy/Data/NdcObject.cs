@@ -19,7 +19,7 @@ public class NdcObject
     public DotValues DotValues { get; init; }
     public CausalContext CausalContext { get; init; }
     public bool IsEmpty => DotValues.Values.All(kv => kv.value.IsEmpty);
-    public override string ToString() => $"{DotValues} / CC: {CausalContext}";
+    public override string ToString() => DotValues.ToString();
 
     /// <summary>
     /// Merges the given object, i.e., add in new version values and remove obsoleted old version values

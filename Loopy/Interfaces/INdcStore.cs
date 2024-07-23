@@ -8,9 +8,9 @@ internal interface INdcStore
 
     void StripCausality();
 
-    NodeClock GetClock();
+    ModeSyncRequest GetSyncRequest();
 
-    (NodeClock clock, List<(Key, NdcObject)> missingObjects) SyncClock(NodeId peer, NodeClock peerClock);
+    ModeSyncResponse SyncClock(NodeId peer, ModeSyncRequest request);
 
-    void SyncRepair(NodeId peer, NodeClock peerClock, List<(Key, NdcObject)> missingObjects);
+    void SyncRepair(NodeId peer, ModeSyncResponse response);
 }

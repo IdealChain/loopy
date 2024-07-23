@@ -51,29 +51,29 @@ public partial class Node
             replicaNodes.IntersectWith(replicaFilter);
 
         // generate a new version of this object
-        var c = EventualStore.GetClock()[Id].Max + 1;
+        var dot = EventualStore.GetNextVersion();
         var o = new NdcObject();
-        var fifoDistances = FifoPriorityPredecessor.Select(pre => c - pre).ToArray();
-        o.DotValues[(Id, c)] = (v, fifoDistances);
+        var fifoDistances = FifoPriorityPredecessor.Select(pre => dot.UpdateId - pre).ToArray();
+        o.DotValues[dot] = (v, fifoDistances);
         o.CausalContext.MergeIn(cc ?? CausalContext.Initial);
-        o.CausalContext[Id] = c;
+        o.CausalContext[Id] = dot.UpdateId;
 
         // raise fifo predecessor for all lower-or-equal priorities
         for (var p = Priority.P0; p <= keyPriority; p++)
-            FifoPriorityPredecessor[(int)p] = c;
+            FifoPriorityPredecessor[(int)p] = dot.UpdateId;
 
         // update and merge local object
         o = Update(k, o);
-        Logger.Trace("created [{Merged}]", o);
-
-        if (replicaNodes.Count == 0)
-            return Task.CompletedTask;
 
         // forward the update to other key replicas
-        foreach (var nodeApi in replicaNodes.Select(Context.GetNodeApi))
-            nodeApi.SendUpdate(k, o);
+        if (replicaNodes.Count > 0)
+        {
+            foreach (var nodeApi in replicaNodes.Select(Context.GetNodeApi))
+                nodeApi.SendUpdate(k, o);
 
-        Logger.Trace("sent to: {ReplicaNodes}", string.Join(", ", replicaNodes));
+            Logger.Trace("sent to {ReplicaNodes}: {Object}", string.Join(", ", replicaNodes), o);
+        }
+
         return Task.CompletedTask;
 
         // async Task ReplicateSync()

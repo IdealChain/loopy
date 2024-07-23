@@ -59,7 +59,7 @@ public class AntiEntropyTests
     }
 
     [Test]
-    public async Task TestFifoScenario()
+    public async Task TestFifoSyncUp()
     {
         var cluster = new LocalNodeCluster(3);
         var n1 = cluster.GetClientApi(1);
@@ -112,6 +112,79 @@ public class AntiEntropyTests
             Assert.That(await n3Ev.GetValues(a), Values.EqualTo(2), a.Name);
             Assert.That(await n3Ev.GetValues(b), Values.EqualTo(3), b.Name);
             Assert.That(await n3Ev.GetValues(c), Values.EqualTo(2), c.Name);
+        });
+    }
+
+    [Test]
+    public async Task TestFifoSyncBuffers()
+    {
+        var cluster = new LocalNodeCluster(4);
+        var n1 = cluster.GetClientApi(1);
+        var n1R2 = cluster.GetClientApi(1, [2]);
+        var n1R3 = cluster.GetClientApi(1, [3]);
+        var n1R4 = cluster.GetClientApi(1, [4]);
+        var n3Fifo = cluster.GetClientApi(3, ConsistencyMode.Fifo);
+        var n3Ev = cluster.GetClientApi(3, ConsistencyMode.Eventual);
+        var n4Fifo = cluster.GetClientApi(4, ConsistencyMode.Fifo);
+        var n4Ev = cluster.GetClientApi(4, ConsistencyMode.Eventual);
+
+        await n1.Put(a, 0);
+        await n1.Put(b, 0);
+        await n1.Put(c, 0);
+        await n1R2.Put(a, 1); // (4) a=1 gets replicated to N2 only (gap on N3 and N4)
+        await n1R3.Put(b, 1); // (5) b=1 gets replicated to N3 only
+        await n1R4.Put(c, 1); // (6) c=1 gets replicated to N4 only
+
+        // check N3/N4 FIFO state: only 1-3 should be visible
+        Assert.Multiple(async () =>
+        {
+            Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(0), b.Name);
+            Assert.That(await n3Fifo.GetValues(c), Values.EqualTo(0), c.Name);
+            Assert.That(await n4Fifo.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n4Fifo.GetValues(b), Values.EqualTo(0), b.Name);
+            Assert.That(await n4Fifo.GetValues(c), Values.EqualTo(0), c.Name);
+        });
+
+        // check N3/N4 eventual state: either 5 (N3) or 6 (N4) should be visible
+        Assert.Multiple(async () =>
+        {
+            Assert.That(await n3Ev.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n3Ev.GetValues(b), Values.EqualTo(1), b.Name);
+            Assert.That(await n3Ev.GetValues(c), Values.EqualTo(0), c.Name);
+            Assert.That(await n4Ev.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n4Ev.GetValues(b), Values.EqualTo(0), b.Name);
+            Assert.That(await n4Ev.GetValues(c), Values.EqualTo(1), c.Name);
+        });
+
+        // run pair-wise anti-entropy between N3 and N4: buffered segments should be invisibly exchanged
+        await cluster.GetBackgroundTasks(3).AntiEntropy(4);
+        await cluster.GetBackgroundTasks(4).AntiEntropy(3);
+
+        // check N3/N4 FIFO state: only 1-3 should be visible, same as before
+        Assert.Multiple(async () =>
+        {
+            Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(0), b.Name);
+            Assert.That(await n3Fifo.GetValues(c), Values.EqualTo(0), c.Name);
+            Assert.That(await n4Fifo.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n4Fifo.GetValues(b), Values.EqualTo(0), b.Name);
+            Assert.That(await n4Fifo.GetValues(c), Values.EqualTo(0), c.Name);
+        });
+
+        // run N3/N4 anti-entropy with N2: missing update 4 should be filled in
+        await cluster.GetBackgroundTasks(3).AntiEntropy(2);
+        await cluster.GetBackgroundTasks(4).AntiEntropy(2);
+
+        // check N3/N4 FIFO state: with all updates being available, FIFO should be up to date
+        Assert.Multiple(async () =>
+        {
+            Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(1), a.Name);
+            Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(1), b.Name);
+            Assert.That(await n3Fifo.GetValues(c), Values.EqualTo(1), c.Name);
+            Assert.That(await n4Fifo.GetValues(a), Values.EqualTo(1), a.Name);
+            Assert.That(await n4Fifo.GetValues(b), Values.EqualTo(1), b.Name);
+            Assert.That(await n4Fifo.GetValues(c), Values.EqualTo(1), c.Name);
         });
     }
 }

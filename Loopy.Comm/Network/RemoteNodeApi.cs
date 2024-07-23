@@ -71,6 +71,6 @@ public class RemoteNodeApi : IDisposable, INodeApi
 
     public async Task<SyncResponse> SyncClock(SyncRequest request, CancellationToken cancellationToken = default)
     {
-        return await _requestSocket.RemoteCall<NodeSyncClockRequest, NodeSyncClockResponse>(request, cancellationToken);
+        return await _requestSocket.RemoteCall<NodeSyncRequest, NodeSyncResponse>(request, cancellationToken);
     }
 }

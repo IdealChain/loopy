@@ -55,9 +55,9 @@ public class NodeApiServer(LocalNodeApi node, string host = "*")
         return new NodeUpdateResponse { Obj = updateResult };
     }
 
-    private async Task<IMessage?> Handle(NodeSyncClockRequest syncRequest)
+    private async Task<IMessage?> Handle(NodeSyncRequest syncRequest)
     {
         var resp = await node.SyncClock(syncRequest);
-        return (NodeSyncClockResponse)resp;
+        return (NodeSyncResponse)resp;
     }
 }

@@ -34,57 +34,133 @@ public class NodeUpdateResponse : IMessage
     [ProtoMember(1)] public required NdcObjectMsg? Obj { get; set; }
 }
 
-[RpcMessage(RpcOperation.NodeSyncClock, RpcDirection.Request)]
+[RpcMessage(RpcOperation.NodeSync, RpcDirection.Request)]
 [ProtoContract]
-public class NodeSyncClockRequest : IMessage
+public class NodeSyncRequest : IMessage
 {
     [ProtoMember(1)] public required int NodeId { get; set; }
-    [ProtoMember(2)] public required List<(ConsistencyMode mode, NodeClockMsg clock)>? NodeClocks { get; set; }
+    [ProtoMember(2)] public required List<(ConsistencyMode mode, NodeSyncRequestStoreMsg req)>? Requests { get; set; }
 
-    public static implicit operator NodeSyncClockRequest(SyncRequest req)
+    public static implicit operator NodeSyncRequest(SyncRequest req)
     {
-        return new NodeSyncClockRequest
+        return new NodeSyncRequest
         {
             NodeId = req.Peer.Id,
-            NodeClocks = req.Select(kv => (kv.Key, (NodeClockMsg)kv.Value)).ToList()
+            Requests = req.Select(kv => (kv.Key, (NodeSyncRequestStoreMsg)kv.Value)).ToList(),
         };
     }
 
-    public static implicit operator SyncRequest(NodeSyncClockRequest msg)
+    public static implicit operator SyncRequest(NodeSyncRequest msg)
     {
         var req = new SyncRequest { Peer = msg.NodeId };
 
-        if (msg.NodeClocks != null)
-            req.MergeIn(msg.NodeClocks.Select(t => (t.mode, (NodeClock)t.clock)));
+        if (msg.Requests != null)
+            req.MergeIn(msg.Requests.Select(t => (t.mode, (ModeSyncRequest)t.req)));
 
         return req;
     }
 }
 
-[RpcMessage(RpcOperation.NodeSyncClock, RpcDirection.Response)]
 [ProtoContract]
-public class NodeSyncClockResponse : IMessage
+public class NodeSyncRequestStoreMsg
+{
+    [ProtoMember(1)] public required NodeClockMsg? Clock { get; set; }
+
+    public static explicit operator NodeSyncRequestStoreMsg(ModeSyncRequest req)
+    {
+        return new NodeSyncRequestStoreMsg { Clock = req.PeerClock, };
+    }
+
+    public static explicit operator ModeSyncRequest(NodeSyncRequestStoreMsg? msg)
+    {
+        return new ModeSyncRequest { PeerClock = msg?.Clock != null ? (NodeClock)msg.Clock : new() };
+    }
+}
+
+[RpcMessage(RpcOperation.NodeSync, RpcDirection.Response)]
+[ProtoContract]
+public class NodeSyncResponse : IMessage
 {
     [ProtoMember(1)] public required int NodeId { get; set; }
-    [ProtoMember(2)] public required List<(ConsistencyMode mode, NodeClockMsg clock, NdcObjectsMsg missingObjects)>? NodeResponse { get; set; }
+    [ProtoMember(2)] public required List<(ConsistencyMode mode, NodeSyncStoreResponseMsg response)>? NodeResponse { get; set; }
 
-    public static implicit operator NodeSyncClockResponse(SyncResponse rep)
+    public static implicit operator NodeSyncResponse(SyncResponse rep)
     {
-        return new NodeSyncClockResponse
+        return new NodeSyncResponse
         {
             NodeId = rep.Peer.Id,
-            NodeResponse = rep.Select(kv => (kv.Key, (NodeClockMsg)kv.Value.clock, (NdcObjectsMsg)kv.Value.missingObjects)).ToList()
+            NodeResponse = rep.Select(kv => (kv.Key, (NodeSyncStoreResponseMsg)kv.Value)).ToList()
         };
     }
 
-    public static implicit operator SyncResponse(NodeSyncClockResponse msg)
+    public static implicit operator SyncResponse(NodeSyncResponse? msg)
     {
         var req = new SyncResponse { Peer = msg.NodeId };
 
-        if (msg.NodeResponse != null)
-            req.MergeIn(msg.NodeResponse.Select(t => (t.mode, ((NodeClock)t.clock, (List<(Key, NdcObject)>)t.missingObjects))));
+        if (msg?.NodeResponse != null)
+            req.MergeIn(msg.NodeResponse.Select(t => (t.mode, (ModeSyncResponse)t.response)));
 
         return req;
+    }
+}
+
+[ProtoContract]
+public class NodeSyncStoreResponseMsg
+{
+    [ProtoMember(1)] public required NodeClockMsg? Clock { get; set; }
+
+    [ProtoMember(2)] public required NdcObjectsMsg? MissingObjects { get; set; }
+
+    [ProtoMember(3)] public required BufferedSegmentsMsg? BufferedSegments { get; set; }
+
+    public static implicit operator NodeSyncStoreResponseMsg(ModeSyncResponse rep)
+    {
+        return new NodeSyncStoreResponseMsg
+        {
+            Clock = rep.PeerClock,
+            MissingObjects = rep.MissingObjects,
+            BufferedSegments = rep.BufferedSegments,
+        };
+    }
+
+    public static implicit operator ModeSyncResponse(NodeSyncStoreResponseMsg? msg)
+    {
+        var rep = new ModeSyncResponse();
+
+        if (msg?.Clock != null)
+            rep.PeerClock = msg.Clock;
+
+        if (msg?.MissingObjects != null)
+            rep.MissingObjects = msg.MissingObjects;
+
+        if (msg?.BufferedSegments != null)
+            rep.BufferedSegments = msg.BufferedSegments;
+
+        return rep;
+    }
+}
+
+[ProtoContract]
+public class BufferedSegmentsMsg
+{
+    [ProtoMember(1)] public required List<(int node, int first, int last, NdcObjectsMsg objects)>? Segments { get; set; }
+
+    public static implicit operator BufferedSegmentsMsg(List<(NodeId node, UpdateIdRange range, List<(Key, NdcObject)> segment)> bufferedSegments)
+    {
+        return new BufferedSegmentsMsg
+        {
+            Segments = bufferedSegments.Select(t => (t.node.Id, t.range.First, t.range.Last, (NdcObjectsMsg)t.segment)).ToList(),
+        };
+    }
+
+    public static implicit operator List<(NodeId node, UpdateIdRange range, List<(Key, NdcObject)> segment)>(BufferedSegmentsMsg? msg)
+    {
+        var bs = new List<(NodeId node, UpdateIdRange range, List<(Key, NdcObject)> segment)>();
+
+        if (msg?.Segments != null)
+            bs.AddRange(msg.Segments.Select(s => ((NodeId)s.node, new UpdateIdRange(s.first, s.last), (List<(Key, NdcObject)>)s.objects)));
+
+        return bs;
     }
 }
 

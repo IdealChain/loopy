@@ -33,7 +33,7 @@ public enum RpcOperation : byte
     ClientPut,
     NodeFetch,
     NodeUpdate,
-    NodeSyncClock,
+    NodeSync,
 }
 
 public enum RpcDirection : byte

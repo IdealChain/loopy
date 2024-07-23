@@ -11,7 +11,7 @@ internal abstract class NdcStoreBase : INdcStore
     private readonly NodeId _nodeId;
     private readonly INodeContext _context;
 
-    public NdcStoreBase(NodeId id, INodeContext context)
+    protected NdcStoreBase(NodeId id, INodeContext context)
     {
         _nodeId = id;
         _context = context;
@@ -90,29 +90,33 @@ internal abstract class NdcStoreBase : INdcStore
             Store(k, Storage[k]);
     }
 
-    public NodeClock GetClock() => NodeClock;
+    public virtual ModeSyncRequest GetSyncRequest() => new ModeSyncRequest { PeerClock = NodeClock };
 
-    public (NodeClock clock, List<(Key, NdcObject)> missingObjects) SyncClock(NodeId peer, NodeClock peerClock)
+    public virtual ModeSyncResponse SyncClock(NodeId peer, ModeSyncRequest request)
     {
+        var response = new ModeSyncResponse { PeerClock = NodeClock };
+
         // get all keys from dots missing in the node p
         var missingKeys = new HashSet<Key>();
         foreach (var n in _context.GetPeerNodes(_nodeId).Intersect(_context.GetPeerNodes(peer)))
-            foreach (var c in NodeClock[n].Except(peerClock[n]))
+            foreach (var c in NodeClock[n].Except(request.PeerClock[n]))
                 missingKeys.Add(DotKeyMap[(n, c)]);
 
         // get the missing objects from keys replicated by p
-        var missingKeyObjects = new List<(Key, NdcObject)>();
         foreach (var k in missingKeys)
         {
             if (_context.GetReplicaNodes(k).Contains(peer))
-                missingKeyObjects.Add((k, Storage[k]));
+                response.MissingObjects.Add((k, Storage[k]));
         }
 
-        return (NodeClock, missingKeyObjects);
+        return response;
     }
 
-    public virtual void SyncRepair(NodeId peer, NodeClock peerClock, List<(Key, NdcObject)> missingObjects)
+    public virtual void SyncRepair(NodeId peer, ModeSyncResponse response)
     {
+        var peerClock = response.PeerClock;
+        var missingObjects = response.MissingObjects;
+
         // update local objects with the missing objects
         foreach (var (k, o) in missingObjects)
             Update(k, o.Fill(peerClock, _context.GetReplicaNodes(k)));

@@ -1,6 +1,7 @@
 using Loopy.Data;
 using Loopy.Enums;
 using NLog;
+using NLog.Fluent;
 using System.Diagnostics;
 
 namespace Loopy;
@@ -25,16 +26,17 @@ public partial class Node
         // 1. gather local clocks
         var request = new SyncRequest { Peer = Id };
         foreach (var (m, s) in Stores)
-            request[m] = s.GetClock();
+            request[m] = s.GetSyncRequest();
 
         // 2. send local clocks to peer for comparison
         var response = await Context.GetNodeApi(peer).SyncClock(request, cancellationToken);
         Trace.Assert(response.Peer == peer);
-        Logger.Trace("got {Missing} missing objects", response.Values.Sum(v => v.missingObjects.Count));
+        Logger.Trace("got {Missing} missing objects, {Segments} buffered segments",
+            response.Values.Sum(v => v.MissingObjects.Count), response.Values.Sum(v => v.BufferedSegments.Count));
 
         // 3. merge received peer clocks and missing objects
         foreach (var (m, s) in Stores)
-            s.SyncRepair(response.Peer, response[m].clock, response[m].missingObjects);
+            s.SyncRepair(response.Peer, response[m]);
     }
 
     internal SyncResponse SyncClock(SyncRequest request)
@@ -45,10 +47,13 @@ public partial class Node
         var response = new SyncResponse { Peer = Id };
         foreach (var (m, s) in Stores)
         {
-            var (_, missingObjects) = response[m] = s.SyncClock(request.Peer, request[m]);
+            response[m] = s.SyncClock(request.Peer, request[m]);
 
-            if (missingObjects.Count > 0)
-                Logger.Trace("{Mode}: returning {Missing} objects", m, missingObjects.Count);
+            if (response[m].MissingObjects.Count > 0)
+                Logger.Trace("{Mode}: returning {Missing} objects", m, response[m].MissingObjects.Count);
+
+            if (response[m].BufferedSegments.Count > 0)
+                Logger.Trace("{Mode}: returning {Missing} buffered segments", m, response[m].BufferedSegments.Count);
         }
 
         // remote sync_repair => return results instead of RPC

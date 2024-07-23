@@ -29,19 +29,19 @@ public static class DictionaryExtensions
         }
     }
 
-    public static string AsCsv<TK, TV>(this Dictionary<TK, TV> dict) where TK : notnull
-    {
-        if (dict.Count == 0)
-            return "-";
-
-        return dict.Select(kv => $"{kv.Key}={kv.Value}").AsCsv();
-    }
-
     public static string AsCsv<T>(this IEnumerable<T> enumerable)
     {
         if (enumerable.TryGetNonEnumeratedCount(out var count) && count == 0)
             return "-";
 
         return string.Join(", ", enumerable);
+    }
+
+    public static string AsCsv<T>(this IEnumerable<T> enumerable, Func<T, string> formatter)
+    {
+        if (enumerable.TryGetNonEnumeratedCount(out var count) && count == 0)
+            return "-";
+
+        return string.Join(", ", enumerable.Select(formatter));
     }
 }
