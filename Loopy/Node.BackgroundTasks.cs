@@ -23,13 +23,14 @@ public partial class Node
         Logger.Trace("requesting sync from {Peer}", peer);
 
         // 1. gather local clocks
-        var request = new SyncRequest { Peer = i };
+        var request = new SyncRequest { Peer = Id };
         foreach (var (m, s) in Stores)
             request[m] = s.GetClock();
 
         // 2. send local clocks to peer for comparison
         var response = await Context.GetNodeApi(peer).SyncClock(request, cancellationToken);
         Trace.Assert(response.Peer == peer);
+        Logger.Trace("got {Missing} missing objects", response.Values.Sum(v => v.missingObjects.Count));
 
         // 3. merge received peer clocks and missing objects
         foreach (var (m, s) in Stores)
@@ -38,10 +39,10 @@ public partial class Node
 
     internal SyncResponse SyncClock(SyncRequest request)
     {
-        using var _ = ScopeContext.PushNestedState($"SyncClock({i}->{request.Peer})");
-         
+        using var _ = ScopeContext.PushNestedState($"SyncClock({Id}->{request.Peer})");
+
         // compare received peer clocks and return any missing objects
-        var response = new SyncResponse { Peer = i };
+        var response = new SyncResponse { Peer = Id };
         foreach (var (m, s) in Stores)
         {
             var (_, missingObjects) = response[m] = s.SyncClock(request.Peer, request[m]);
@@ -57,20 +58,33 @@ public partial class Node
     public async Task Heartbeat(TimeSpan tolerance, CancellationToken cancellationToken = default)
     {
         using var _ = ScopeContext.PushNestedState($"Heartbeat()");
+        var now = DateTimeOffset.Now;
 
-        var ts = DateTimeOffset.Now;
-        foreach(var p in FifoExtensions.Priorities)
-            await Put($"{p}_{Id}", ts.ToString(), cancellationToken: cancellationToken);
+        // update our own timestamp
+        await Put(Id.ToString(), now.ToString(), cancellationToken: cancellationToken);
 
-        foreach(var n in Context.GetPeerNodes(Id).Where(n => n != Id))
+        // evaluate peer timestamps
+        foreach (var n in Context.GetPeerNodes(Id).Where(n => n != Id))
         {
-            var result = await Get(n.ToString(), mode: Enums.ConsistencyMode.Fifo, cancellationToken: cancellationToken);
-            if (result.values.Length == 1 &&
-                DateTimeOffset.TryParse(result.values[0].Data, out var last) &&
-                ts - last > tolerance)
-            {
-                Logger.Warn("not heard from {Node} for {Age}", n, ts - last);
-            }
+            var ages = await Task.WhenAll(GetAge(n, ConsistencyMode.Fifo), GetAge(n, ConsistencyMode.Eventual));
+            var (fifoAge, evAge) = (ages[0], ages[1]);
+            if (!fifoAge.HasValue || !evAge.HasValue)
+                continue;
+
+            if (fifoAge.Value > tolerance && evAge.Value <= tolerance)
+                Logger.Warn("{Node}: up, but missing FIFO values for {Age}", n, fifoAge.Value);
+            else if (evAge.Value > tolerance)
+                Logger.Warn("{Node}: not heard from for {Age}", n, evAge.Value);
+        }
+
+        async Task<TimeSpan?> GetAge(NodeId node, ConsistencyMode mode)
+        {
+            var (values, _) = await Get(node.ToString(), 1, mode, cancellationToken);
+            if (values.Length == 1 && DateTimeOffset.TryParse(values[0].Data, out var last))
+                return now - last;
+
+            Logger.Warn("no valid heartbeat timestamp from {Node} ({Values})", node, values.AsCsv());
+            return null;
         }
     }
 }

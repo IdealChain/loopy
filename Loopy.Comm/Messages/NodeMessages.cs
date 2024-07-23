@@ -123,7 +123,7 @@ public class NdcObjectMsg
         return new NdcObjectMsg
         {
             DotValues = obj.DotValues.Select(kv =>
-            (kv.Key.NodeId.Id, kv.Key.UpdateId, kv.Value.value.Data, kv.Value.fifoDistances)).ToList(),
+                (kv.Key.NodeId.Id, kv.Key.UpdateId, kv.Value.value.Data, kv.Value.fifoDistances)).ToList()!,
             CausalContext = obj.CausalContext,
         };
     }
@@ -160,7 +160,9 @@ public class NdcObjectsMsg()
         var objs = new List<(Key, NdcObject)>();
 
         if (msg?.Objects != null)
-            objs.AddRange(msg.Objects.Select(t => ((Key)t.key, (NdcObject)t.obj)));
+            objs.AddRange(msg.Objects
+                .Where(t => !string.IsNullOrEmpty(t.key))
+                .Select(t => ((Key)t.key, (NdcObject)t.obj)));
 
         return objs;
     }

@@ -13,15 +13,13 @@ namespace Loopy;
 [DebuggerDisplay("Node {Id.Id}")]
 public partial class Node
 {
-    private NodeId i;
-
-    public NodeId Id => i;
+    public NodeId Id { get; }
     public Logger Logger { get; }
     public INodeContext Context { get; }
 
     public Node(NodeId id, INodeContext context)
     {
-        i = id;
+        Id = id;
         Logger = LogManager.GetLogger($"{nameof(Node)}({Id.Id:00})");
         Context = context;
 
