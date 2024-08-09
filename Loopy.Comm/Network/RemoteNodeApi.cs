@@ -1,7 +1,7 @@
 ﻿using Loopy.Comm.Messages;
-using Loopy.Data;
-using Loopy.Enums;
-using Loopy.Interfaces;
+using Loopy.Core.Data;
+using Loopy.Core.Enums;
+using Loopy.Core.Interfaces;
 using NetMQ.Sockets;
 using System.Diagnostics.CodeAnalysis;
 

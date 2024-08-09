@@ -1,10 +1,11 @@
 ﻿using Loopy.Comm.Network;
-using Loopy.Data;
-using Loopy.Interfaces;
+using Loopy.Core;
+using Loopy.Core.Data;
+using Loopy.Core.Interfaces;
 
-namespace Loopy.NodeShell;
+namespace Loopy.Node;
 
-internal class SingleNodeContext : INodeContext, IDisposable
+public class SingleNodeContext : INodeContext, IDisposable
 {
     private readonly NodeId _nodeId;
     private readonly NodeId[] _peers;
@@ -13,13 +14,13 @@ internal class SingleNodeContext : INodeContext, IDisposable
     public SingleNodeContext(NodeId nodeId, IEnumerable<NodeId> peers)
     {
         _nodeId = nodeId;
-        _peers = peers.ToArray();
+        _peers = peers.Where(n => n != _nodeId).ToArray();
 
-        Node = new Node(nodeId, this);
+        Node = new Core.Node(nodeId, this);
         _nodeApis[nodeId] = new LocalNodeApi(Node);
     }
 
-    public Node Node { get; }
+    public Core.Node Node { get; }
 
     public IEnumerable<NodeId> GetReplicaNodes(Key key) => _peers.Prepend(_nodeId);
 

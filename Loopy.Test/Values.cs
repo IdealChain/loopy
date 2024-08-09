@@ -1,5 +1,5 @@
-using Loopy.Data;
-using Loopy.Interfaces;
+using Loopy.Core.Data;
+using Loopy.Core.Interfaces;
 using NUnit.Framework;
 using NUnit.Framework.Constraints;
 

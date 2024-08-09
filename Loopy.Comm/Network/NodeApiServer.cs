@@ -1,5 +1,5 @@
 using Loopy.Comm.Messages;
-using Loopy.Data;
+using Loopy.Core;
 using NetMQ.Sockets;
 using NLog;
 

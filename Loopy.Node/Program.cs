@@ -1,14 +1,13 @@
-﻿using Loopy;
-using Loopy.Comm.Network;
-using Loopy.Data;
-using Loopy.NodeShell;
+﻿using Loopy.Comm.Network;
+using Loopy.Core;
+using Loopy.Core.Data;
+using Loopy.Node;
 using NetMQ;
 using NLog;
 using NLog.Layouts;
 using NLog.Targets;
 using System.CommandLine;
 using System.Diagnostics;
-using System.Reflection;
 
 var cancellation = new CancellationTokenSource();
 ConfigureLogging();
@@ -19,7 +18,8 @@ static void ConfigureLogging()
 {
     var console = new ConsoleTarget("console")
     {
-        Layout = new SimpleLayout { Text = @"${logger} ${scopenested}: ${message}" }
+        Layout = new SimpleLayout { Text = @"${logger} ${scopenested}: ${message}" },
+        StdErr = true,
     };
 
     var config = new NLog.Config.LoggingConfiguration();

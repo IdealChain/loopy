@@ -1,5 +1,5 @@
 using Loopy.Comm.Messages;
-using Loopy.Enums;
+using Loopy.Core.Enums;
 using NetMQ;
 using NUnit.Framework;
 

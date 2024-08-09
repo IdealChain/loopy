@@ -1,4 +1,4 @@
-﻿using Loopy.Enums;
+﻿using Loopy.Core.Enums;
 using ProtoBuf;
 
 namespace Loopy.Comm.Messages;

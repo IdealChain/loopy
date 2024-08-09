@@ -1,5 +1,5 @@
 using Loopy.Comm.Network;
-using Loopy.Data;
+using Loopy.Core.Data;
 using Loopy.Test.LocalCluster;
 using NetMQ;
 using NUnit.Framework;

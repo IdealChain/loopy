@@ -1,4 +1,4 @@
-using Loopy.Data;
+using Loopy.Core.Data;
 using NUnit.Framework;
 
 namespace Loopy.Test.LocalCluster;

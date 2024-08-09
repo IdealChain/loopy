@@ -1,7 +1,8 @@
+using Loopy.Core;
+using Loopy.Core.Data;
+using Loopy.Core.Enums;
+using Loopy.Core.Interfaces;
 using System.Collections;
-using Loopy.Data;
-using Loopy.Enums;
-using Loopy.Interfaces;
 
 namespace Loopy.Test.LocalCluster;
 

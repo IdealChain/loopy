@@ -1,5 +1,5 @@
-using Loopy.Data;
-using Loopy.Enums;
+using Loopy.Core.Data;
+using Loopy.Core.Enums;
 using ProtoBuf;
 
 namespace Loopy.Comm.Messages;

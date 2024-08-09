@@ -1,7 +1,6 @@
 ﻿using Loopy.Comm.Network;
-using Loopy.Data;
-using Loopy.Enums;
-using NetMQ;
+using Loopy.Core.Data;
+using Loopy.Core.Enums;
 using Spectre.Console;
 using System.CommandLine;
 using System.Diagnostics;
