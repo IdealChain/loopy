@@ -1,10 +1,11 @@
 using Loopy.Comm.Network;
 using Loopy.Core.Data;
-using Loopy.Test.LocalCluster;
+using Loopy.Core.Test;
+using Loopy.Core.Test.LocalCluster;
 using NetMQ;
 using NUnit.Framework;
 
-namespace Loopy.Test.Comm;
+namespace Loopy.Comm.Test.Network;
 
 public class ApiTests
 {

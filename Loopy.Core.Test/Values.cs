@@ -3,9 +3,9 @@ using Loopy.Core.Interfaces;
 using NUnit.Framework;
 using NUnit.Framework.Constraints;
 
-namespace Loopy.Test;
+namespace Loopy.Core.Test;
 
-internal static class Values
+public static class Values
 {
     public static CollectionEquivalentConstraint EquivalentTo(params Value[] values) => Is.EquivalentTo(values);
 

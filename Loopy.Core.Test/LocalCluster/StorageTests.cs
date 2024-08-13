@@ -1,7 +1,7 @@
 using Loopy.Core.Data;
 using NUnit.Framework;
 
-namespace Loopy.Test.LocalCluster;
+namespace Loopy.Core.Test.LocalCluster;
 
 public class StorageTests
 {

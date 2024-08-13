@@ -1,10 +1,9 @@
-using Loopy.Core;
 using Loopy.Core.Data;
 using Loopy.Core.Enums;
 using Loopy.Core.Interfaces;
 using System.Collections;
 
-namespace Loopy.Test.LocalCluster;
+namespace Loopy.Core.Test.LocalCluster;
 
 public class LocalNodeCluster : IEnumerable<NodeId>, INodeContext
 {

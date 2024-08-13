@@ -1,7 +1,7 @@
 using Loopy.Core.Data;
 using NUnit.Framework;
 
-namespace Loopy.Test.Data;
+namespace Loopy.Core.Test.Data;
 
 public class CausalContextTests
 {

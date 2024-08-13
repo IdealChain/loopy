@@ -2,7 +2,7 @@ using Loopy.Core.Data;
 using Loopy.Core.Enums;
 using NUnit.Framework;
 
-namespace Loopy.Test.Data;
+namespace Loopy.Core.Test.Data;
 
 public class UpdateIdRangeTests
 {

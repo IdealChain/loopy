@@ -3,7 +3,7 @@ using NLog.Layouts;
 using NLog.Targets;
 using NUnit.Framework;
 
-namespace Loopy.Test;
+namespace Loopy.Core.Test;
 
 [SetUpFixture]
 public class ConfigureLogging

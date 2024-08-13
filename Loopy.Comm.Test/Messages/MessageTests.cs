@@ -3,7 +3,7 @@ using Loopy.Core.Enums;
 using NetMQ;
 using NUnit.Framework;
 
-namespace Loopy.Test.Comm;
+namespace Loopy.Comm.Test.Messages;
 
 public class MessageTests
 {

@@ -2,7 +2,7 @@ using Loopy.Core.Data;
 using Loopy.Core.Enums;
 using NUnit.Framework;
 
-namespace Loopy.Test.LocalCluster;
+namespace Loopy.Core.Test.LocalCluster;
 
 public class AntiEntropyTests
 {
