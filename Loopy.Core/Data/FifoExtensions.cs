@@ -12,10 +12,10 @@ public static class FifoExtensions
     /// </summary>
     public static int GetFifoPredecessor(this int[] fifoDistances, int updateId, Priority prio)
     {
-        Trace.Assert(fifoDistances.Length == Priorities.Length, "FIFO priority/distance length mismatch");
+        Debug.Assert(fifoDistances.Length == Priorities.Length, "FIFO priority/distance length mismatch");
 
         var dist = fifoDistances[(int)prio];
-        Trace.Assert(updateId >= dist && dist >= 1, "invalid updateId or distance");
+        Debug.Assert(updateId >= dist && dist >= 1, "invalid updateId or distance");
         return updateId - dist;
     }
 
@@ -49,7 +49,7 @@ public static class FifoExtensions
     /// </summary>
     public static Map<Priority, int> StripFifoDistances(this int[] fifoDistances)
     {
-        Trace.Assert(fifoDistances.Length == Priorities.Length, "FIFO priority/distance length mismatch");
+        Debug.Assert(fifoDistances.Length == Priorities.Length, "FIFO priority/distance length mismatch");
 
         var currentDistance = 1;
         var map = new Map<Priority, int>();

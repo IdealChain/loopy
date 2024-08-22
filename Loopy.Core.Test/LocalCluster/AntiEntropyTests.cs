@@ -23,8 +23,8 @@ public class AntiEntropyTests
 
         Assert.That(await n2NR.GetValues(a), Values.Empty());
 
-        await c.GetBackgroundTasks(1).AntiEntropy(2);
-        await c.GetBackgroundTasks(2).AntiEntropy(1);
+        await c[1].BackgroundTasks.AntiEntropy(2);
+        await c[2].BackgroundTasks.AntiEntropy(1);
 
         Assert.That(await n2NR.GetValues(a), Values.EquivalentTo(2));
         Assert.That(await n1NR.GetValues(b), Values.EquivalentTo(7));
@@ -43,7 +43,7 @@ public class AntiEntropyTests
 
         // AE every node with every other node
         foreach(var (n1, n2) in c.SelectMany(n1 => c.Select(n2 => (n1, n2)).Where(t => t.n1 != t.n2)))
-            await c.GetBackgroundTasks(n1).AntiEntropy(n2, CancellationToken.None);
+            await c[n1].BackgroundTasks.AntiEntropy(n2, CancellationToken.None);
 
         foreach (var n in c)
         {
@@ -96,7 +96,7 @@ public class AntiEntropyTests
         });
 
         // run N3 anti-entropy with N2: should receive update 4, but not 8
-        await cluster.GetBackgroundTasks(3).AntiEntropy(2);
+        await cluster[3].BackgroundTasks.AntiEntropy(2);
 
         // check N3 FIFO state: now, updates 1-7 should be merged
         Assert.Multiple(async () =>
@@ -158,8 +158,8 @@ public class AntiEntropyTests
         });
 
         // run pair-wise anti-entropy between N3 and N4: buffered segments should be invisibly exchanged
-        await cluster.GetBackgroundTasks(3).AntiEntropy(4);
-        await cluster.GetBackgroundTasks(4).AntiEntropy(3);
+        await cluster[3].BackgroundTasks.AntiEntropy(4);
+        await cluster[4].BackgroundTasks.AntiEntropy(3);
 
         // check N3/N4 FIFO state: only 1-3 should be visible, same as before
         Assert.Multiple(async () =>
@@ -173,8 +173,8 @@ public class AntiEntropyTests
         });
 
         // run N3/N4 anti-entropy with N2: missing update 4 should be filled in
-        await cluster.GetBackgroundTasks(3).AntiEntropy(2);
-        await cluster.GetBackgroundTasks(4).AntiEntropy(2);
+        await cluster[3].BackgroundTasks.AntiEntropy(2);
+        await cluster[4].BackgroundTasks.AntiEntropy(2);
 
         // check N3/N4 FIFO state: with all updates being available, FIFO should be up to date
         Assert.Multiple(async () =>

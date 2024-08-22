@@ -34,7 +34,7 @@ public class ConsistencyTests
         Assert.That(await n2.GetValues(a), Values.EqualTo(0));
         Assert.That(await n2.GetValues(b), Values.EqualTo(0));
 
-        await c.GetBackgroundTasks(2).AntiEntropy(1);
+        await c[2].BackgroundTasks.AntiEntropy(1);
 
         // N2: after anti-entropy, we expect the latest values a=1, b=2
         Assert.That(await n2.GetValues(a), Values.EqualTo(1));
@@ -64,7 +64,7 @@ public class ConsistencyTests
         Assert.That(await n2.GetValues(a), Values.EqualTo(0));
         Assert.That(await n2.GetValues(b), Values.EqualTo(0));
 
-        await c.GetBackgroundTasks(2).AntiEntropy(1);
+        await c[2].BackgroundTasks.AntiEntropy(1);
 
         // N2: after anti-entropy, we expect the latest values a=-, b=-
         Assert.That(await n2.GetValues(a), Values.Empty());
@@ -89,7 +89,7 @@ public class ConsistencyTests
         await n1.Put(y, 0);
         await n1.Put(z, 0);
 
-        // lose write of low prio x=1, then replicate high prio z=2 and low prio y=3
+        // lose write of low prio x=1, then replicate high prio y=2 and low prio z=3
         await n1NR.Put(x, 1);
         await n1.Put(y, 2);
         await n1.Put(z, 3);
@@ -108,7 +108,7 @@ public class ConsistencyTests
         Assert.That(await n2High.GetValues(y), Values.EqualTo(2));
         Assert.That(await n2High.GetValues(z), Values.Empty());
 
-        await c.GetBackgroundTasks(2).AntiEntropy(1);
+        await c[2].BackgroundTasks.AntiEntropy(1);
 
         // Basic FIFO: after anti-entropy, we expect the latest values x=1, y=2, z=3
         Assert.That(await n2All.GetValues(x), Values.EqualTo(1));

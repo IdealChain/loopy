@@ -15,4 +15,8 @@
       <ProjectReference Include="..\Loopy.Core\Loopy.Core.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="Loopy.Comm.Test" />
+    </ItemGroup>
+
 </Project>

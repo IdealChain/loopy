@@ -1,22 +1,27 @@
 using Loopy.Core.Data;
+using NLog;
 
 namespace Loopy.Core.Interfaces;
 
 /// <summary>
-/// Auxillary information for a node to communicate with its peers
+/// Auxillary information containing a node's configuration
 /// </summary>
 public interface INodeContext
 {
     /// <summary>
-    /// Gets all nodes that should be replicas for a given key
+    /// Gets the node's own node ID
     /// </summary>
-    IEnumerable<NodeId> GetReplicaNodes(Key key);
+    NodeId NodeId { get; }
 
     /// <summary>
-    /// Gets the peer nodes for the given node, i.e., all nodes that share
-    /// replicas of some objects (including the node itself)
+    /// Gets a logging interface for collecting debug info
     /// </summary>
-    IEnumerable<NodeId> GetPeerNodes(NodeId n);
+    ILogger Logger { get; }
+
+    /// <summary>
+    /// Gets the replication strategy that controls the placement of key values on nodes
+    /// </summary>
+    IReplicationStrategy ReplicationStrategy { get; }
 
     /// <summary>
     /// Gets the node-to-node RPC API 

@@ -1,25 +1,33 @@
-﻿using Loopy.Comm.Network;
+﻿using Loopy.Comm.Interfaces;
+using Loopy.Comm.NdcMessages;
+using Loopy.Comm.Rpc;
+using Loopy.Comm.Sockets;
 using Loopy.Core.Data;
 using Loopy.Core.Enums;
 using Spectre.Console;
 using System.CommandLine;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Loopy.ClientShell;
 
 internal class Shell
 {
-    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly RemoteClientApi _remoteClient;
+    private RpcClientApi _remoteClient;
     private readonly CancellationToken _cancellationToken;
+    private string _host;
+    private CausalContext _causalContext = CausalContext.Initial;
     private bool _exit;
 
     public Shell(string host, CancellationToken cancellationToken)
     {
+        _host = host;
         _cancellationToken = cancellationToken;
-        _remoteClient = new RemoteClientApi(host);
+
+        ChangeNode(host);
     }
 
     public async Task Run()
@@ -35,7 +43,7 @@ internal class Shell
 
     private string GetPrompt()
     {
-        var prompt = new StringBuilder(_remoteClient.Host);
+        var prompt = new StringBuilder(_host);
         prompt.AppendFormat("/{0}", _remoteClient.ConsistencyMode);
 
         if (_remoteClient.ReadQuorum > 1)
@@ -128,18 +136,19 @@ internal class Shell
     private async Task<string> Get(string key, CancellationToken cancellationToken)
     {
         var (values, cc) = await _remoteClient.Get(key, cancellationToken: cancellationToken);
+        _causalContext.MergeIn(cc, Math.Max);
         return values.Length > 0 ? values.AsCsv() : "Empty";
     }
 
     private async Task<string> Put(string key, string value, CancellationToken cancellationToken)
     {
-        await _remoteClient.Put(key, value, cancellationToken: cancellationToken);
+        await _remoteClient.Put(key, value, _causalContext, cancellationToken: cancellationToken);
         return "OK";
     }
 
     private async Task<string> Delete(string key, CancellationToken cancellationToken)
     {
-        await _remoteClient.Delete(key, cancellationToken: cancellationToken);
+        await _remoteClient.Delete(key, _causalContext, cancellationToken: cancellationToken);
         return "OK";
     }
 
@@ -149,16 +158,21 @@ internal class Shell
 
     private void ShowCausalContext()
     {
-        foreach (var kv in _remoteClient.CausalContext)
+        foreach (var kv in _causalContext)
             AnsiConsole.WriteLine("{0}: {1}", kv.Key, kv.Value);
     }
 
+    [MemberNotNull(nameof(_remoteClient), nameof(_host), nameof(_causalContext))]
     private void ChangeNode(string host)
     {
         // expand node ID shorthand
-        if (int.TryParse(host, out var id))
-            host = $"127.0.0.{id}";
+        if (int.TryParse(host, out var id) && id < 255)
+            host = NetMQRpcDefaults.Localhost(id);
 
-        _remoteClient.Host = host;
+        _host = host;
+        _causalContext = CausalContext.Initial;
+
+        _remoteClient?.Dispose();
+        _remoteClient = new RpcClientApi(new NetMQRpcClient<NdcMessage>(host, NetMQRpcDefaults.ClientApiPort));
     }
 }

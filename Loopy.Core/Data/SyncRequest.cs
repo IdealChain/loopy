@@ -9,7 +9,7 @@ public class SyncRequest : Map<ConsistencyMode, ModeSyncRequest>
 
 public class ModeSyncRequest
 {
-    public NodeClock PeerClock { get; init; }
+    public NodeClock PeerClock { get; init; } = new();
 }
 
 public class SyncResponse : Map<ConsistencyMode, ModeSyncResponse>

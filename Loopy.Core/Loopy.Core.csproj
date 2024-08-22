@@ -7,7 +7,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="NLog" Version="5.3.2" />
+      <PackageReference Include="NLog" Version="5.3.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="Loopy.Core.Test" />
     </ItemGroup>
 
 </Project>

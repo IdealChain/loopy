@@ -44,7 +44,7 @@ public class FifoSegmentSet<T> : IEnumerable<(UpdateIdRange range, T value)>
         return min;
     }
 
-    public void Add(UpdateIdRange range, T value)
+    public UpdateIdRange Add(UpdateIdRange range, T value)
     {
         // find position of exact or next larger range start match
         var i = _segments.BinarySearch((range, value), _segmentComparer);
@@ -52,14 +52,14 @@ public class FifoSegmentSet<T> : IEnumerable<(UpdateIdRange range, T value)>
 
         // check whether new value can be merged into neighboring ranges
         if (sortPos - 1 >= 0 && !range.HasGapTo(_segments[sortPos - 1].range))
-            Merge(sortPos - 1, range, value);
+            return Merge(sortPos - 1, range, value);
         else if (sortPos < _segments.Count && !range.HasGapTo(_segments[sortPos].range))
-            Merge(sortPos, range, value);
+            return Merge(sortPos, range, value);
         else
-            Insert(sortPos, range, value);
+            return Insert(sortPos, range, value);
     }
 
-    private void Merge(int i, UpdateIdRange range, T value)
+    private UpdateIdRange Merge(int i, UpdateIdRange range, T value)
     {
         // sanity check that merge is compatible and neighboring ranges are not overlapped
         Debug.Assert(range.Overlaps(_segments[i].range) || range.AdjacentTo(_segments[i].range));
@@ -68,15 +68,17 @@ public class FifoSegmentSet<T> : IEnumerable<(UpdateIdRange range, T value)>
 
         var existing = _segments[i];
         _segments[i] = (existing.range.Union(range), _mergeFunc(existing.value, value));
+        return _segments[i].range;
     }
 
-    private void Insert(int i, UpdateIdRange range, T value)
+    private UpdateIdRange Insert(int i, UpdateIdRange range, T value)
     {
         // sanity check that neighboring ranges are not overlapped
         Debug.Assert(i - 1 < 0 || _segments[i - 1].range.Last < range.First);
         Debug.Assert(i + 1 >= _segments.Count || _segments[i + 1].range.First > range.Last);
 
         _segments.Insert(i, (range, value));
+        return _segments[i].range;
     }
 
     public int Count => _segments.Count;

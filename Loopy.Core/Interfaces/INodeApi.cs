@@ -21,7 +21,7 @@ public interface INodeApi
     /// <summary>
     /// Merges in the object for the given key, without waiting for the result
     /// </summary>
-    void SendUpdate(Key k, NdcObject o);
+    Task SendUpdate(Key k, NdcObject o, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Syncs the passed node clock with the own one and returns any missing objects

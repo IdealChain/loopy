@@ -1,3 +1,4 @@
+using Loopy.Core.Api;
 using Loopy.Core.Data;
 using Loopy.Core.Enums;
 using Loopy.Core.Interfaces;
@@ -5,56 +6,31 @@ using System.Collections;
 
 namespace Loopy.Core.Test.LocalCluster;
 
-public class LocalNodeCluster : IEnumerable<NodeId>, INodeContext
+public class LocalNodeCluster : IEnumerable<NodeId>
 {
-    private readonly Dictionary<NodeId, Node> _nodes = new();
-    private readonly Dictionary<NodeId, LocalBackgroundTasks> _backgroundTasks = new();
+    private readonly Dictionary<NodeId, NodeContext> _nodes;
 
     public LocalNodeCluster(int nodeCount)
     {
-        foreach (var nodeId in Enumerable.Range(1, nodeCount).Select(i => new NodeId(i)))
-        {
-            _nodes[nodeId] = new Node(nodeId, this);
-            _backgroundTasks[nodeId] = new LocalBackgroundTasks(_nodes[nodeId]);
-        }
+        var nodeIds = Enumerable.Range(1, nodeCount).Select(n => (NodeId)n);
+        var replicationStrategy = new GlobalReplicationStrategy(nodeIds);
+
+        _nodes = nodeIds.Select(id => new NodeContext(id, replicationStrategy, CreateRemoteNodeApi))
+            .ToDictionary(ctx => ctx.NodeId, ctx => ctx);
     }
 
-    public IEnumerable<NodeId> GetReplicaNodes(Key key) => _nodes.Keys;
+    private INodeApi CreateRemoteNodeApi(NodeId id) => this[id].GetNodeApi();
 
-    public IEnumerable<NodeId> GetPeerNodes(NodeId n) => _nodes.Keys;
+    public NodeContext this[NodeId id] => _nodes[id];
 
-    public LocalNodeApi GetNodeApi(NodeId id) => new LocalNodeApi(_nodes[id]);
-
-    INodeApi INodeContext.GetNodeApi(NodeId id) => GetNodeApi(id);
-
-    public LocalClientApi GetClientApi(NodeId id) => new LocalClientApi(_nodes[id]);
-
-    public LocalClientApi GetClientApi(NodeId id, ConsistencyMode consistency = ConsistencyMode.Eventual)
+    public IClientApi GetClientApi(NodeId id, ConsistencyMode consistency = ConsistencyMode.Eventual, NodeId[]? replicationFilter = null)
     {
-        return new LocalClientApi(_nodes[id])
-        {
-            ConsistencyMode = consistency
-        };
+        var clientApi = this[id].GetClientApi(replicationFilter);
+        clientApi.ConsistencyMode = consistency;
+        return clientApi;
     }
 
-    public LocalClientApi GetClientApi(NodeId id, ConsistencyMode consistency, NodeId[] replicationFilter)
-    {
-        return new LocalClientApi(_nodes[id])
-        {
-            ConsistencyMode = consistency,
-            ReplicationFilter = replicationFilter
-        };
-    }
-
-    public LocalClientApi GetClientApi(NodeId id, NodeId[] replicationFilter)
-    {
-        return new LocalClientApi(_nodes[id])
-        {
-            ReplicationFilter = replicationFilter
-        };
-    }
-
-    public LocalBackgroundTasks GetBackgroundTasks(NodeId id) => _backgroundTasks[id];
+    public IClientApi GetClientApi(NodeId id, NodeId[] replicationFilter) => this[id].GetClientApi(replicationFilter);
 
     public IEnumerator<NodeId> GetEnumerator() => _nodes.Keys.GetEnumerator();
 

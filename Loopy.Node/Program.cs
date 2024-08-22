@@ -1,7 +1,9 @@
-﻿using Loopy.Comm.Network;
-using Loopy.Core;
+﻿using Loopy.Comm.Interfaces;
+using Loopy.Comm.NdcMessages;
+using Loopy.Comm.Rpc;
+using Loopy.Comm.Sockets;
+using Loopy.Core.Api;
 using Loopy.Core.Data;
-using Loopy.Node;
 using NetMQ;
 using NLog;
 using NLog.Layouts;
@@ -23,7 +25,7 @@ static void ConfigureLogging()
     };
 
     var config = new NLog.Config.LoggingConfiguration();
-    config.AddRule(LogLevel.Trace, LogLevel.Fatal, console);
+    config.AddRule(LogLevel.Debug, LogLevel.Fatal, console);
     LogManager.Configuration = config;
 }
 
@@ -62,22 +64,23 @@ static RootCommand BuildCommand(CancellationTokenSource cancellation)
 
 static async Task RunNode(int nodeId, int[] peers, CancellationToken cancellationToken)
 {
-    using var context = new SingleNodeContext(nodeId, peers.Select(p => new NodeId(p)));
+    var replicationStrategy = new GlobalReplicationStrategy(peers.Prepend(nodeId).Select(p => new NodeId(p)));
+    var context = new NodeContext(nodeId, replicationStrategy,
+        id => new RpcNodeApi(new NetMQRpcClient<NdcMessage>(id, NetMQRpcDefaults.NodeApiPort)));
 
     try
     {
-        var nodeServer = new NodeApiServer(new LocalNodeApi(context.Node), context.GetHost(nodeId));
-        var clientServer = new ClientApiServer(new LocalClientApi(context.Node), context.GetHost(nodeId));
-        var backgroundTasks = new LocalBackgroundTasks(context.Node);
+        var nodeServer = new NetMQRpcServer<NdcMessage>(NetMQRpcDefaults.NodeApiPort, nodeId);
+        var clientServer = new NetMQRpcServer<NdcMessage>(NetMQRpcDefaults.ClientApiPort, nodeId);
 
-        await Task.WhenAll(
-            nodeServer.HandleRequests(cancellationToken),
-            clientServer.HandleRequests(cancellationToken),
-            backgroundTasks.Run(cancellationToken));
+        await await Task.WhenAny(
+            nodeServer.ServeAsync(new RpcNodeApiHandler(context.GetNodeApi()), cancellationToken),
+            clientServer.ServeAsync(new RpcClientApiHandler(context.GetClientApi()), cancellationToken),
+            context.BackgroundTasks.Run(cancellationToken));
     }
     catch (Exception e) when (!cancellationToken.IsCancellationRequested)
     {
-        context.Node.Logger.Fatal(e, e.Message);
+        context.Logger.Fatal(e, e.ToString());
     }
 }
 

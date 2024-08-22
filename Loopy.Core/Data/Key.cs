@@ -7,7 +7,7 @@ public readonly partial record struct Key
 {
     public Key(string name)
     {
-        Name = name;
+        Name = name ?? throw new ArgumentNullException(nameof(name));
 
         var m = KeyPriorityRegex().Match(name);
         if (m.Success)

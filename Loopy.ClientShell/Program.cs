@@ -1,4 +1,5 @@
 ﻿using Loopy.ClientShell;
+using Loopy.Comm.Interfaces;
 using NetMQ;
 using System.CommandLine;
 
@@ -21,7 +22,7 @@ static void HandleCancelKey(CancellationTokenSource cancellation)
 static RootCommand BuildCommand(CancellationTokenSource cancellation)
 {
     var rootCommand = new RootCommand("Loopy Client Shell");
-    var hostArgument = new Argument<string>("host", () => "127.0.0.1", "Node to connect to");
+    var hostArgument = new Argument<string>("host", () => NetMQRpcDefaults.Localhost(1), "Node to connect to");
 
     rootCommand.Add(hostArgument);
     rootCommand.SetHandler(host =>

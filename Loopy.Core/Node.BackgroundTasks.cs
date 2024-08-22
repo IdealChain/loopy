@@ -5,54 +5,64 @@ using System.Diagnostics;
 
 namespace Loopy.Core;
 
-public partial class Node
+internal partial class Node
 {
-    public Task StripCausality()
+    public async Task StripCausality(CancellationToken cancellationToken = default)
     {
         using var _ = ScopeContext.PushNestedState("StripCausality");
-        foreach (var (_, s) in Stores)
-            s.StripCausality();
 
-        return Task.CompletedTask;
+        using (await StoreLock.EnterWriteAsync(cancellationToken))
+            foreach (var (_, s) in Stores)
+                s.StripCausality();
     }
 
     public async Task AntiEntropy(NodeId peer, CancellationToken cancellationToken = default)
     {
         using var _ = ScopeContext.PushNestedState($"AntiEntropy({Id}<-{peer})");
-        Trace.Assert(peer != Id);
-        Logger.Trace("requesting sync from {Peer}", peer);
+        Debug.Assert(peer != Id);
+        Logger.Debug("requesting sync from {Peer}", peer);
 
         // 1. gather local clocks
         var request = new SyncRequest { Peer = Id };
-        foreach (var (m, s) in Stores)
-            request[m] = s.GetSyncRequest();
+        using (await StoreLock.EnterReadAsync(cancellationToken))
+        {
+            foreach (var (m, s) in Stores)
+                request[m] = s.GetSyncRequest();
+        }
 
-        // 2. send local clocks to peer for comparison
+        // 2. send local clocks to peer for comparison (the lock can be released until we receive the results)
         var response = await Context.GetNodeApi(peer).SyncClock(request, cancellationToken);
-        Trace.Assert(response.Peer == peer);
-        Logger.Trace("got {Missing} missing objects, {Segments} buffered segments",
+        Debug.Assert(response.Peer == peer);
+        Logger.Debug("got {Objs} missing objects, {Segs} buffered segments",
             response.Values.Sum(v => v.MissingObjects.Count), response.Values.Sum(v => v.BufferedSegments.Count));
 
         // 3. merge received peer clocks and missing objects
-        foreach (var (m, s) in Stores)
-            s.SyncRepair(response.Peer, response[m]);
+        using (await StoreLock.EnterWriteAsync(cancellationToken))
+        {
+            foreach (var (m, s) in Stores)
+                s.SyncRepair(response.Peer, response[m]);
+        }
     }
 
-    internal SyncResponse SyncClock(SyncRequest request)
+    internal async Task<SyncResponse> SyncClock(SyncRequest request, CancellationToken cancellationToken = default)
     {
         using var _ = ScopeContext.PushNestedState($"SyncClock({Id}->{request.Peer})");
 
         // compare received peer clocks and return any missing objects
         var response = new SyncResponse { Peer = Id };
-        foreach (var (m, s) in Stores)
+
+        using (await StoreLock.EnterReadAsync(cancellationToken))
         {
-            response[m] = s.SyncClock(request.Peer, request[m]);
+            foreach (var (m, s) in Stores)
+            {
+                response[m] = s.SyncClock(request.Peer, request[m]);
 
-            if (response[m].MissingObjects.Count > 0)
-                Logger.Trace("{Mode}: returning {Missing} objects", m, response[m].MissingObjects.Count);
+                if (response[m].MissingObjects.Count > 0)
+                    Logger.Debug("{Mode}: returning {Objs} objects", m, response[m].MissingObjects.Count);
 
-            if (response[m].BufferedSegments.Count > 0)
-                Logger.Trace("{Mode}: returning {Missing} buffered segments", m, response[m].BufferedSegments.Count);
+                if (response[m].BufferedSegments.Count > 0)
+                    Logger.Debug("{Mode}: returning {Segs} buffered segments", m, response[m].BufferedSegments.Count);
+            }
         }
 
         // remote sync_repair => return results instead of RPC
@@ -68,7 +78,7 @@ public partial class Node
         await Put(Id.ToString(), now.ToString(), cancellationToken: cancellationToken);
 
         // evaluate peer timestamps
-        foreach (var n in Context.GetPeerNodes(Id).Where(n => n != Id))
+        foreach (var n in Context.ReplicationStrategy.GetPeerNodes(Id).Where(n => n != Id))
         {
             var ages = await Task.WhenAll(GetAge(n, ConsistencyMode.Fifo), GetAge(n, ConsistencyMode.Eventual));
             var (fifoAge, evAge) = (ages[0], ages[1]);
@@ -84,11 +94,20 @@ public partial class Node
         async Task<TimeSpan?> GetAge(NodeId node, ConsistencyMode mode)
         {
             var (values, _) = await Get(node.ToString(), 1, mode, cancellationToken);
-            if (values.Length == 1 && DateTimeOffset.TryParse(values[0].Data, out var last))
-                return now - last;
 
-            Logger.Warn("no valid heartbeat timestamp from {Node} ({Values})", node, values.AsCsv());
-            return null;
+            if (values.Length == 0)
+            {
+                Logger.Debug("no heartbeat yet from {Node}", node);
+                return null;
+            }
+
+            if (values.Length > 1 || !DateTimeOffset.TryParse(values[0].Data, out var last))
+            {
+                Logger.Warn("invalid heartbeat timestamp from {Node} ({Values})", node, values.AsCsv());
+                return null;
+            }
+
+            return now - last;
         }
     }
 }

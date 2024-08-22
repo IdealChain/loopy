@@ -1,18 +1,18 @@
 using Loopy.Core.Data;
 using Loopy.Core.Enums;
+using Loopy.Core.Interfaces;
 using NLog;
 
 namespace Loopy.Core.Stores;
 
 internal class FifoStore : NdcStoreBase
 {
-    private readonly Node _node;
-    private readonly Priority _minPrio;
+    public Priority MinPrio { get; }
 
     /// <summary>
     /// Per-node limit of not-yet-visible updates to be kept in buffer
     /// </summary>
-    private const int BufferedUpdatesLimit = 1000;
+    public int BufferedUpdatesLimit { get; set; } = 1000;
 
     /// <summary>
     /// Storage for a sorted set of contiguous segments of not-yet-applied object updates -
@@ -20,23 +20,22 @@ internal class FifoStore : NdcStoreBase
     /// </summary>
     private readonly Dictionary<NodeId, FifoSegmentSet<Dictionary<Key, NdcObject>>> _bufferedSegments = new();
 
-    public FifoStore(Node node, Priority minPrio) : base(node.Id, node.Context)
+    public FifoStore(INodeContext context, Priority minPrio) : base(context)
     {
-        _node = node;
-        _minPrio = minPrio;
+        MinPrio = minPrio;
     }
 
     public void ProcessUpdate(Key k, NdcObject o)
     {
-        using var _ = ScopeContext.PushNestedState($"Fifo({k}, {_minPrio})");
+        using var _ = ScopeContext.PushNestedState($"Fifo({k}, {MinPrio})");
 
         // if the key's priority is below our level, it is filtered and must be ignored
-        if (k.Priority < _minPrio)
+        if (k.Priority < MinPrio)
             return;
 
         // short circuit the common case of no gaps: we can apply immediately, just as in the eventual store
         if (o.DotValues.All(kv =>
-                CanMerge(kv.Key.NodeId, new UpdateIdRange(kv.Key.UpdateId, _minPrio, kv.Value.fifoDistances))))
+                CanMerge(kv.Key.NodeId, new UpdateIdRange(kv.Key.UpdateId, MinPrio, kv.Value.fifoDistances))))
             Update(k, o);
         else
             Buffer(k, o);
@@ -50,12 +49,12 @@ internal class FifoStore : NdcStoreBase
         {
             if (dot.UpdateId - NodeClock[dot.NodeId].Base > BufferedUpdatesLimit)
             {
-                _node.Logger.Warn("dropping (buffer size limit exceeded): {Dot}", dot);
+                Context.Logger.Warn("dropping (buffer size limit exceeded): {Dot}", dot);
                 continue;
             }
 
             var dotObject = o.DotValues.Count > 1 ? o.Split([dot]) : o;
-            var dotRange = new UpdateIdRange(dot.UpdateId, _minPrio, value.fifoDistances);
+            var dotRange = new UpdateIdRange(dot.UpdateId, MinPrio, value.fifoDistances);
 
             if (CanMerge(dot.NodeId, dotRange))
                 Update(k, dotObject);
@@ -69,9 +68,11 @@ internal class FifoStore : NdcStoreBase
         if (!_bufferedSegments.TryGetValue(node, out var nodeBuffer))
             _bufferedSegments[node] = nodeBuffer = new(MergeSegments);
 
-        _node.Logger.Trace("buffering gapped segment: {Node} {Range}", node, range);
         var segment = new Dictionary<Key, NdcObject> { { k, dotObject } };
-        nodeBuffer.Add(range, segment);
+        var mergedRange = nodeBuffer.Add(range, segment);
+
+        Context.Logger.Debug("buffering gapped segment: {Node} {Range} => {MergedRange}",
+            node, range, mergedRange);
     }
 
     /// <summary>
@@ -104,7 +105,7 @@ internal class FifoStore : NdcStoreBase
             while (segments.Count > 0 && CanMerge(n, segments.PeekRange))
             {
                 var (range, objects) = segments.Pop();
-                _node.Logger.Trace("merging buffered segment: {Node} {Range}", n, range);
+                Context.Logger.Debug("merging buffered segment: {Node} {Range}", n, range);
                 foreach (var (k, o) in objects)
                     Update(k, o);
             }
@@ -113,7 +114,7 @@ internal class FifoStore : NdcStoreBase
                 _bufferedSegments.Remove(n);
 
             if (NodeClock[n].Bitmap.Any())
-                _node.Logger.Warn("FIFO condition violated: gaps for {Peer} {Updates}", n, NodeClock[n]);
+                Context.Logger.Warn("FIFO condition violated: gaps for {Node} {Clock}", n, NodeClock[n]);
         }
     }
 
@@ -121,7 +122,7 @@ internal class FifoStore : NdcStoreBase
     {
         // fill in update IDs that are allowed to be skipped
         foreach (var dv in o.DotValues)
-            NodeClock[dv.Key.NodeId].UnionWith(dv.GetFifoSkippableUpdates(_minPrio));
+            NodeClock[dv.Key.NodeId].UnionWith(dv.GetFifoSkippableUpdates(MinPrio));
 
         base.Store(k, o);
     }
@@ -132,8 +133,8 @@ internal class FifoStore : NdcStoreBase
 
         // augment missing objects with missing FIFO segments
         foreach (var (n, ns) in _bufferedSegments)
-            foreach (var s in ns.Where(s => s.range.Last > request.PeerClock[n].Base))
-                response.BufferedSegments.Add((n, s.range, s.value.Select(kv => (kv.Key, kv.Value)).ToList()));
+        foreach (var s in ns.Where(s => s.range.Last > request.PeerClock[n].Base))
+            response.BufferedSegments.Add((n, s.range, s.value.Select(kv => (kv.Key, kv.Value)).ToList()));
 
         return response;
     }
@@ -145,7 +146,7 @@ internal class FifoStore : NdcStoreBase
 
         // since we trust the peer for its FIFOness, we can close any gaps
         var peerClock = response.PeerClock;
-        var peerNodes = new HashSet<NodeId>(_node.Context.GetPeerNodes(_node.Id));
+        var peerNodes = new HashSet<NodeId>(Context.ReplicationStrategy.GetPeerNodes(Context.NodeId));
         foreach (var (n, c) in peerClock)
         {
             if (!peerNodes.Contains(n))
@@ -154,7 +155,7 @@ internal class FifoStore : NdcStoreBase
             if (!c.Bitmap.Any())
                 NodeClock[n].UnionWith(c);
             else
-                _node.Logger.Warn("{Peer} sent FIFO node clock with gaps: {Set}", n, c);
+                Context.Logger.Warn("{Node} sent FIFO node clock with gaps: {Updates}", n, c);
         }
 
         // add received segments to buffer

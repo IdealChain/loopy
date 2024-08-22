@@ -7,7 +7,7 @@ public class Map<TKey, TValue> : Dictionary<TKey, TValue>
     where TValue : new()
     where TKey : notnull
 {
-    private Lazy<bool> _storeCreatedValue = new(() => !typeof(TValue).IsValueType);
+    private readonly Lazy<bool> _storeCreatedValue = new(() => !typeof(TValue).IsValueType);
 
     public Map()
     {

@@ -52,7 +52,7 @@ public readonly struct UpdateIdRange : IEquatable<UpdateIdRange>
         return new UpdateIdRange(Math.Min(First, other.First), Math.Max(Last, other.Last));
     }
 
-    public override string ToString() => $"[{First}-{Last}]";
+    public override string ToString() => First == Last ? $"[{First}]" : $"[{First}-{Last}]";
 
     #region IEquatable
 

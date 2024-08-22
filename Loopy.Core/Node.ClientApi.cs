@@ -4,8 +4,18 @@ using NLog;
 
 namespace Loopy.Core;
 
-public partial class Node
+internal partial class Node
 {
+    /// <summary>
+    /// Quorum fetching timeout to ask the next available replica
+    /// </summary>
+    private static readonly TimeSpan QuorumQueryNextNodeInterval = TimeSpan.FromSeconds(0.5);
+
+    /// <summary>
+    /// Whether to wait for replication acknowledgment responses
+    /// </summary>
+    private static readonly bool SynchronousReplication = false;
+
     /// <summary>
     /// Fifo predecessor per prio (preceeding update id with equal-or-higher priority)
     /// </summary>
@@ -16,76 +26,135 @@ public partial class Node
     {
         using var _ = ScopeContext.PushNestedState($"Get({k}, q{quorum}, {mode})");
 
+        // short circuit common case: directly fetch from local node
+        NdcObject obj;
+        if (quorum <= 1 && Context.ReplicationStrategy.GetReplicaNodes(k).Contains(Id))
+            obj = await Fetch(k, mode, cancellationToken);
+        else
+            obj = await GetFromReplicaQuorum(k, quorum, mode, cancellationToken);
+
+        Logger.Debug("returning {Obj}", obj);
+        var values = obj.DotValues.Values
+            .Where(v => !v.value.IsEmpty)
+            .Select(v => v.value).ToArray();
+        return (values, obj.CausalContext);
+    }
+
+    private async Task<NdcObject> GetFromReplicaQuorum(Key k, int quorum, ConsistencyMode mode, CancellationToken cancellationToken)
+    {
         // ensure "local" node is part of quorum, if it is among the replica nodes
-        var replicaNodes = Context.GetReplicaNodes(k)
-            .OrderByDescending(n => n == Id)
-            .Select(Context.GetNodeApi);
-
-        var objs = new List<NdcObject>();
-        var fetchTasks = replicaNodes.Take(quorum).Select(api => api.Fetch(k, mode, cancellationToken)).ToList();
-
-        if (fetchTasks.Count < quorum)
-            Logger.Warn("quorum cannot be met: {Count} nodes < {Quorum} quorum", fetchTasks.Count, quorum);
-
-        while (objs.Count < quorum && fetchTasks.Count > 0)
+        var remainingNodes = new Queue<NodeId>(Context.ReplicationStrategy.GetReplicaNodes(k).OrderByDescending(n => n == Id));
+        if (remainingNodes.Count < quorum)
         {
-            var finishedTask = await Task.WhenAny(fetchTasks);
-            objs.Add(finishedTask.Result);
-            fetchTasks.Remove(finishedTask);
+            Logger.Warn("reducing requested quorum {Quorum} to {Remaining} available nodes", quorum, remainingNodes.Count);
+            quorum = remainingNodes.Count;
+        }
+
+        var objs = new List<NdcObject>(quorum);
+        var pendingQueries = new Dictionary<Task, NodeId>(quorum);
+
+        // send initial queries
+        while (pendingQueries.Count < quorum && remainingNodes.Count > 0)
+        {
+            var node = remainingNodes.Dequeue();
+            pendingQueries.Add(Context.GetNodeApi(node).Fetch(k, mode, cancellationToken), node);
+        }
+        Logger.Debug("initially querying {Nodes}...", pendingQueries.Values.AsCsv());
+
+        while (objs.Count < quorum && !cancellationToken.IsCancellationRequested)
+        {
+            if (pendingQueries.Count == 0)
+            {
+                Logger.Warn("quorum not met, but out of replica nodes to query");
+                throw new TaskCanceledException("quorum not met");
+            }
+
+            // wait for next result or timeout
+            var nextReplicaTimeout = Task.Delay(QuorumQueryNextNodeInterval, cancellationToken);
+            var completeTask = await Task.WhenAny(pendingQueries.Keys.Append(nextReplicaTimeout));
+
+            if (completeTask is Task<NdcObject> fetchTask &&
+                pendingQueries.Remove(fetchTask, out var node) &&
+                fetchTask.IsCompletedSuccessfully)
+            {
+                objs.Add(await fetchTask);
+                Logger.Debug("got {Node} response [{Count}/{Quorum}]", node, objs.Count, quorum);
+            }
+            else if (remainingNodes.Count > 0 && mode == ConsistencyMode.Eventual)
+            {
+                // query an additional replica node
+                node = remainingNodes.Dequeue();
+                pendingQueries.Add(Context.GetNodeApi(node).Fetch(k, mode, cancellationToken), node);
+                Logger.Debug("additionally querying {Node}...", node);
+            }
         }
 
         // return merged result
-        var m = objs.Aggregate((o1, o2) => o1.Merge(o2));
-        Logger.Trace("returning [{Merged}]", m);
-        return (m.DotValues.Values.Select(v => v.value).ToArray(), m.CausalContext);
+        cancellationToken.ThrowIfCancellationRequested();
+        return objs.Aggregate((o1, o2) => o1.Merge(o2));
     }
 
-    public Task Put(Key k, Value v, CausalContext? cc = default, NodeId[]? replicaFilter = default,
+    public async Task Put(Key k, Value v, CausalContext? cc = default, NodeId[]? replicaFilter = default,
         CancellationToken cancellationToken = default)
     {
         using var _ = ScopeContext.PushNestedState($"Put({k}, {v})");
 
         var keyPriority = k.Priority;
-        var replicaNodes = new HashSet<NodeId>(Context.GetReplicaNodes(k).Where(n => n != Id));
+        var replicaNodes = new HashSet<NodeId>(Context.ReplicationStrategy.GetReplicaNodes(k).Where(n => n != Id));
         if (replicaFilter != null)
             replicaNodes.IntersectWith(replicaFilter);
 
-        // generate a new version of this object
-        var dot = EventualStore.GetNextVersion();
         var o = new NdcObject();
-        var fifoDistances = FifoPriorityPredecessor.Select(pre => dot.UpdateId - pre).ToArray();
-        o.DotValues[dot] = (v, fifoDistances);
-        o.CausalContext.MergeIn(cc ?? CausalContext.Initial);
-        o.CausalContext[Id] = dot.UpdateId;
+        using (await StoreLock.EnterWriteAsync(cancellationToken))
+        {
+            // generate a new version of this object
+            var dot = EventualStore.GetNextVersion();
+            var fifoDistances = FifoPriorityPredecessor.Select(pre => dot.UpdateId - pre).ToArray();
+            o.DotValues[dot] = (v, fifoDistances);
+            o.CausalContext.MergeIn(cc ?? CausalContext.Initial);
+            o.CausalContext[Id] = dot.UpdateId;
 
-        // raise fifo predecessor for all lower-or-equal priorities
-        for (var p = Priority.P0; p <= keyPriority; p++)
-            FifoPriorityPredecessor[(int)p] = dot.UpdateId;
+            // raise fifo predecessor for all lower-or-equal priorities
+            for (var p = Priority.P0; p <= keyPriority; p++)
+                FifoPriorityPredecessor[(int)p] = dot.UpdateId;
 
-        // update and merge local object
-        o = Update(k, o);
+            // update and merge local object
+            o = UpdateUnderLock(k, o);
+        }
 
         // forward the update to other key replicas
         if (replicaNodes.Count > 0)
         {
-            foreach (var nodeApi in replicaNodes.Select(Context.GetNodeApi))
-                nodeApi.SendUpdate(k, o);
-
-            Logger.Trace("sent to {ReplicaNodes}: {Object}", string.Join(", ", replicaNodes), o);
+            if (!SynchronousReplication)
+                await Replicate(replicaNodes, k, o, cancellationToken);
+            else
+                await ReplicateWithAck(replicaNodes, k, o, cancellationToken);
         }
+    }
 
-        return Task.CompletedTask;
+    /// <summary>
+    /// Async replication: fire and forget
+    /// </summary>
+    private async Task Replicate(IEnumerable<NodeId> replicaNodes, Key k, NdcObject o, CancellationToken ct)
+    {
+        Logger.Debug("replicating async to {Nodes}", replicaNodes.AsCsv());
+        await Task.WhenAll(replicaNodes.Select(n => Context.GetNodeApi(n).SendUpdate(k, o, ct)));
+        return;
+    }
 
-        // async Task ReplicateSync()
-        // {
-        //     try
-        //     {
-        //         await Task.WhenAll(replicaNodes.Select(n => Context.GetNodeApi(n).Update(k, o, cancellationToken)));
-        //         Logger.Trace("replicated to: {ReplicaNodes}", string.Join(", ", replicaNodes));
-        //     }
-        //     catch (OperationCanceledException) { Logger.Trace("replication canceled"); }
-        //     catch (Exception e) { Logger.Warn("replication failed: {Message}", e.Message); }
-        // }
+    /// <summary>
+    /// Synchronous replication: wait for ACK confirmations
+    /// </summary>
+    private async Task ReplicateWithAck(IEnumerable<NodeId> replicaNodes, Key k, NdcObject o, CancellationToken ct)
+    {
+        Logger.Debug("replicating sync to {Nodes}", replicaNodes.AsCsv());
+        var pendingTasks = replicaNodes.ToDictionary(id => Context.GetNodeApi(id).Update(k, o, ct));
+        while (pendingTasks.Count > 0 && !ct.IsCancellationRequested)
+        {
+            var done = await Task.WhenAny(pendingTasks.Keys);
+            if (done.IsCompletedSuccessfully && pendingTasks.Remove(done, out var node))
+                Logger.Debug("got {Node} replication ack", node);
+        }
     }
 
     public async Task Delete(Key k, CausalContext? cc = default, NodeId[]? replicaFilter = default,

@@ -6,16 +6,9 @@ namespace Loopy.Core.Stores;
 /// <summary>
 /// NDC framework store: NC, DKM, WM, NSK, ST
 /// </summary>
-internal abstract class NdcStoreBase : INdcStore
+internal abstract class NdcStoreBase(INodeContext context) : INdcStore
 {
-    private readonly NodeId _nodeId;
-    private readonly INodeContext _context;
-
-    protected NdcStoreBase(NodeId id, INodeContext context)
-    {
-        _nodeId = id;
-        _context = context;
-    }
+    protected INodeContext Context { get; } = context;
 
     /// <summary>
     /// All dots from current and past versions seen by this node
@@ -49,7 +42,7 @@ internal abstract class NdcStoreBase : INdcStore
         if (!Storage.TryGetValue(k, out var obj) || obj.IsEmpty)
             obj = new();
 
-        return obj.Fill(NodeClock, _context.GetReplicaNodes(k));
+        return obj.Fill(NodeClock, Context.ReplicationStrategy.GetReplicaNodes(k));
     }
 
     protected virtual NdcObject Update(Key k, NdcObject o)
@@ -98,14 +91,15 @@ internal abstract class NdcStoreBase : INdcStore
 
         // get all keys from dots missing in the node p
         var missingKeys = new HashSet<Key>();
-        foreach (var n in _context.GetPeerNodes(_nodeId).Intersect(_context.GetPeerNodes(peer)))
+        foreach (var n in Context.ReplicationStrategy.GetPeerNodes(Context.NodeId).Intersect(Context.ReplicationStrategy.GetPeerNodes(peer)))
             foreach (var c in NodeClock[n].Except(request.PeerClock[n]))
-                missingKeys.Add(DotKeyMap[(n, c)]);
+                if (DotKeyMap.TryGetValue((n, c), out var key))
+                    missingKeys.Add(key);
 
         // get the missing objects from keys replicated by p
         foreach (var k in missingKeys)
         {
-            if (_context.GetReplicaNodes(k).Contains(peer))
+            if (Context.ReplicationStrategy.GetReplicaNodes(k).Contains(peer))
                 response.MissingObjects.Add((k, Storage[k]));
         }
 
@@ -119,22 +113,22 @@ internal abstract class NdcStoreBase : INdcStore
 
         // update local objects with the missing objects
         foreach (var (k, o) in missingObjects)
-            Update(k, o.Fill(peerClock, _context.GetReplicaNodes(k)));
+            Update(k, o.Fill(peerClock, Context.ReplicationStrategy.GetReplicaNodes(k)));
 
         // merge p's node clock entry to close gaps
         NodeClock[peer].UnionWith(peerClock[peer]);
 
         // update the WM with new i and p clocks
-        foreach (var n in peerClock.Keys.Intersect(_context.GetPeerNodes(_nodeId)))
+        foreach (var n in peerClock.Keys.Intersect(Context.ReplicationStrategy.GetPeerNodes(Context.NodeId)))
             Watermark[peer][n] = Math.Max(Watermark[peer][n], peerClock[n].Base);
 
         foreach (var n in NodeClock.Keys)
-            Watermark[_nodeId][n] = Math.Max(Watermark[_nodeId][n], NodeClock[n].Base);
+            Watermark[Context.NodeId][n] = Math.Max(Watermark[Context.NodeId][n], NodeClock[n].Base);
 
         // remove entries known by all peers
         foreach (var (n, c) in DotKeyMap.Keys)
         {
-            if (_context.GetPeerNodes(n).Min(m => Watermark[m][n]) >= c)
+            if (Context.ReplicationStrategy.GetPeerNodes(n).Min(m => Watermark[m][n]) >= c)
                 DotKeyMap.Remove((n, c));
         }
     }
