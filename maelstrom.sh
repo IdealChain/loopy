@@ -6,12 +6,5 @@ LOG="--log-stderr true --log-net-send true --log-net-recv true"
 LOG=""
 
 dotnet build Loopy.MaelstromNode -c Release
-
-if [ -d ../maelstrom ]; then
-  cd ../maelstrom && exec lein run test --bin $BIN $ARGS $PARAMS $LOG
-elif command -v maelstrom; then
-  exec maelstrom test --bin $BIN $ARGS $PARAMS $LOG
-else
-  echo maelstrom not found
-  exit -1
-fi
+(cd ../maelstrom && lein run test --bin $BIN $ARGS $PARAMS $LOG)
+java -jar ../Checker/target/consistency-1.0-SNAPSHOT-jar-with-dependencies.jar ../maelstrom/store/latest/history.edn

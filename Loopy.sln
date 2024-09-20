@@ -22,7 +22,10 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Loopy.Node", "Loopy.Node\Loopy.Node.csproj", "{8FFE2346-BB7F-406E-A5EB-349C8B5B6030}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Loopy.Core.Test", "Loopy.Core.Test\Loopy.Core.Test.csproj", "{6CFAB5B6-F1FC-4BAD-AC97-4574B2413CBD}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Loopy.MaelstromNode", "Loopy.MaelstromNode\Loopy.MaelstromNode.csproj", "{03C2475A-D3E4-4928-A6DD-CC07B31C8BC2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Loopy.MaelstromTest", "Loopy.MaelstromTest\Loopy.MaelstromTest.csproj", "{7CAEB8D4-2B6B-43DE-B0D4-D91657550373}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -58,6 +61,10 @@ Global
 		{03C2475A-D3E4-4928-A6DD-CC07B31C8BC2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{03C2475A-D3E4-4928-A6DD-CC07B31C8BC2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{03C2475A-D3E4-4928-A6DD-CC07B31C8BC2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7CAEB8D4-2B6B-43DE-B0D4-D91657550373}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7CAEB8D4-2B6B-43DE-B0D4-D91657550373}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7CAEB8D4-2B6B-43DE-B0D4-D91657550373}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7CAEB8D4-2B6B-43DE-B0D4-D91657550373}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

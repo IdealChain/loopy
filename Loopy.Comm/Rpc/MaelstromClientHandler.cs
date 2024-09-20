@@ -9,6 +9,11 @@ namespace Loopy.Comm.Rpc;
 
 public class MaelstromClientHandler(IClientApi client) : IRpcServerHandler<RequestBase, ResponseBase>
 {
+    /// <summary>
+    /// Whether to fake non-atomic compare-and-swap (CAS) support
+    /// </summary>
+    private static readonly bool EnableNonAtomicCas = true;
+
     private static readonly ILogger Logger = LogManager.GetLogger(nameof(MaelstromClientHandler));
 
     private readonly CausalContext _causalContext = CausalContext.Initial;
@@ -60,6 +65,9 @@ public class MaelstromClientHandler(IClientApi client) : IRpcServerHandler<Reque
 
     private async Task<ResponseBase> Handle(CasRequest body, CancellationToken ct)
     {
+        if (!EnableNonAtomicCas)
+            return new ErrorResponse(ErrorCode.NotSupported, "cas not supported");
+
         // yes, this is not very atomic
         var (values, cc) = await client.Get(body.key, cancellationToken: ct);
         if (!GetSingleValue(body.key, values, out var value, out var error))
