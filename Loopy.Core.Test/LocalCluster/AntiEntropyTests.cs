@@ -80,7 +80,7 @@ public class AntiEntropyTests
         await n1.Put(c, 2);
 
         // check N3 FIFO state: only updates 1-3 should be merged
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(1), a.Name);
             Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(0), b.Name);
@@ -88,7 +88,7 @@ public class AntiEntropyTests
         });
 
         // check N3 eventual state: all updates except 4 and 8 should be merged
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Ev.GetValues(a), Values.EqualTo(2), a.Name);
             Assert.That(await n3Ev.GetValues(b), Values.EqualTo(3), b.Name);
@@ -99,7 +99,7 @@ public class AntiEntropyTests
         await cluster[3].BackgroundTasks.AntiEntropy(2);
 
         // check N3 FIFO state: now, updates 1-7 should be merged
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(2), a.Name);
             Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(2), b.Name);
@@ -107,12 +107,31 @@ public class AntiEntropyTests
         });
 
         // check N3 eventual state: all updates except 8 should be merged
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Ev.GetValues(a), Values.EqualTo(2), a.Name);
             Assert.That(await n3Ev.GetValues(b), Values.EqualTo(3), b.Name);
             Assert.That(await n3Ev.GetValues(c), Values.EqualTo(2), c.Name);
         });
+
+        // run N3 anti-entropy with N1: finally, with update 8, all updates should be visible
+        await cluster[3].BackgroundTasks.AntiEntropy(1);
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(3), a.Name);
+            Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(3), b.Name);
+            Assert.That(await n3Fifo.GetValues(c), Values.EqualTo(2), c.Name);
+        });
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Assert.That(await n3Ev.GetValues(a), Values.EqualTo(3), a.Name);
+            Assert.That(await n3Ev.GetValues(b), Values.EqualTo(3), b.Name);
+            Assert.That(await n3Ev.GetValues(c), Values.EqualTo(2), c.Name);
+        });
+
+        cluster.SaveMaelstromHistory("fifo_syncup");
     }
 
     [Test]
@@ -136,7 +155,7 @@ public class AntiEntropyTests
         await n1R4.Put(c, 1); // (6) c=1 gets replicated to N4 only
 
         // check N3/N4 FIFO state: only 1-3 should be visible
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(0), a.Name);
             Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(0), b.Name);
@@ -147,7 +166,7 @@ public class AntiEntropyTests
         });
 
         // check N3/N4 eventual state: either 5 (N3) or 6 (N4) should be visible
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Ev.GetValues(a), Values.EqualTo(0), a.Name);
             Assert.That(await n3Ev.GetValues(b), Values.EqualTo(1), b.Name);
@@ -162,7 +181,7 @@ public class AntiEntropyTests
         await cluster[4].BackgroundTasks.AntiEntropy(3);
 
         // check N3/N4 FIFO state: only 1-3 should be visible, same as before
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(0), a.Name);
             Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(0), b.Name);
@@ -172,12 +191,23 @@ public class AntiEntropyTests
             Assert.That(await n4Fifo.GetValues(c), Values.EqualTo(0), c.Name);
         });
 
+        // check N3/N4 eventual state: 5 (N3) and 6 (N4) should be visible
+        await Assert.MultipleAsync(async () =>
+        {
+            Assert.That(await n3Ev.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n3Ev.GetValues(b), Values.EqualTo(1), b.Name);
+            Assert.That(await n3Ev.GetValues(c), Values.EqualTo(1), c.Name);
+            Assert.That(await n4Ev.GetValues(a), Values.EqualTo(0), a.Name);
+            Assert.That(await n4Ev.GetValues(b), Values.EqualTo(1), b.Name);
+            Assert.That(await n4Ev.GetValues(c), Values.EqualTo(1), c.Name);
+        });
+
         // run N3/N4 anti-entropy with N2: missing update 4 should be filled in
         await cluster[3].BackgroundTasks.AntiEntropy(2);
         await cluster[4].BackgroundTasks.AntiEntropy(2);
 
         // check N3/N4 FIFO state: with all updates being available, FIFO should be up to date
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n3Fifo.GetValues(a), Values.EqualTo(1), a.Name);
             Assert.That(await n3Fifo.GetValues(b), Values.EqualTo(1), b.Name);
@@ -186,5 +216,18 @@ public class AntiEntropyTests
             Assert.That(await n4Fifo.GetValues(b), Values.EqualTo(1), b.Name);
             Assert.That(await n4Fifo.GetValues(c), Values.EqualTo(1), c.Name);
         });
+
+        // check N3/N4 eventual state:  with all updates being available, all should be up to date
+        await Assert.MultipleAsync(async () =>
+        {
+            Assert.That(await n3Ev.GetValues(a), Values.EqualTo(1), a.Name);
+            Assert.That(await n3Ev.GetValues(b), Values.EqualTo(1), b.Name);
+            Assert.That(await n3Ev.GetValues(c), Values.EqualTo(1), c.Name);
+            Assert.That(await n4Ev.GetValues(a), Values.EqualTo(1), a.Name);
+            Assert.That(await n4Ev.GetValues(b), Values.EqualTo(1), b.Name);
+            Assert.That(await n4Ev.GetValues(c), Values.EqualTo(1), c.Name);
+        });
+
+        cluster.SaveMaelstromHistory("fifo_syncbuffers");
     }
 }

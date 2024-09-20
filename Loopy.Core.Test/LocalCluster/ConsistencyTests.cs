@@ -39,6 +39,8 @@ public class ConsistencyTests
         // N2: after anti-entropy, we expect the latest values a=1, b=2
         Assert.That(await n2.GetValues(a), Values.EqualTo(1));
         Assert.That(await n2.GetValues(b), Values.EqualTo(2));
+
+        c.SaveMaelstromHistory("fifo_get");
     }
 
     [Test]
@@ -69,6 +71,8 @@ public class ConsistencyTests
         // N2: after anti-entropy, we expect the latest values a=-, b=-
         Assert.That(await n2.GetValues(a), Values.Empty());
         Assert.That(await n2.GetValues(b), Values.Empty());
+
+        c.SaveMaelstromHistory("fifo_delete");
     }
 
     private readonly Key x = "P0_x";
@@ -119,5 +123,7 @@ public class ConsistencyTests
         Assert.That(await n2High.GetValues(x), Values.Empty());
         Assert.That(await n2High.GetValues(y), Values.EqualTo(2));
         Assert.That(await n2High.GetValues(z), Values.Empty());
+
+        c.SaveMaelstromHistory("fifo_priority");
     }
 }

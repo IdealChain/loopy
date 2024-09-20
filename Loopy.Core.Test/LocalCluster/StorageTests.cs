@@ -43,7 +43,7 @@ public class StorageTests
         var p2 = n2.Put(a, 2, CausalContext.Initial);
         await Task.WhenAll(p1, p2);
         
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n1.GetValues(a), Values.EquivalentTo(1, 2));
             Assert.That(await n2.GetValues(a), Values.EquivalentTo(1, 2));
@@ -51,7 +51,7 @@ public class StorageTests
 
         // seen it, now resolve conflict with 3
         await n1.Put(a, 3, (await n1.GetCC(a)));
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n1.GetValues(a), Values.EquivalentTo(3));
             Assert.That(await n2.GetValues(a), Values.EquivalentTo(3));
@@ -59,7 +59,7 @@ public class StorageTests
         
         // put new value without context
         await n1.Put(a, 4, CausalContext.Initial);
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(await n1.GetValues(a), Values.EquivalentTo(4));
             Assert.That(await n2.GetValues(a), Values.EquivalentTo(4));
