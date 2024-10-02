@@ -1,4 +1,5 @@
 using Loopy.Core.Data;
+using Loopy.Core.Enums;
 using Loopy.Core.Interfaces;
 using NLog;
 
@@ -29,6 +30,7 @@ public class NodeContext : INodeContext
     public NodeId NodeId { get; }
     public ILogger Logger { get; }
     public IReplicationStrategy ReplicationStrategy { get; }
+    public INotificationStrategy NotificationStrategy { get; set; } = new NullNotification();
 
     public IClientApi GetClientApi() => new LocalClientApi(_node);
     public IClientApi GetClientApi(NodeId[]? replicationFilter) => new LocalClientApi(_node) { ReplicationFilter = replicationFilter };
@@ -40,5 +42,11 @@ public class NodeContext : INodeContext
             _nodeApiCache[id] = nodeApi = _remoteNodeApiFactory(id);
 
         return nodeApi;
+    }
+
+    private class NullNotification : INotificationStrategy
+    {
+        public void NotifyValueChanged(Key key, ConsistencyMode cm, Value[] values, CausalContext cc)
+        { }
     }
 }

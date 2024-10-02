@@ -39,7 +39,7 @@ public class Envelope
 [JsonDerivedType(typeof(WrappedNdcResponse), "ndc_ok")]
 public abstract class MessageBase
 {
-    [JsonRequired] public int msg_id { get; set; }
+    public int msg_id { get; set; }
 
     private static int _lastId = 0;
     public static int GetUniqueId() => Interlocked.Increment(ref _lastId);

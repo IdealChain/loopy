@@ -35,7 +35,7 @@ public class MaelstromClientHandler(IClientApi client) : IRpcServerHandler<Reque
     private async Task<ResponseBase> Handle(ReadRequest body, CancellationToken ct)
     {
         var (values, cc) = await client.Get(body.key, cancellationToken: ct);
-        if (!GetSingleValue(body.key, values, out var value, out var error))
+        if (!TryGetSingleValue(body.key, values, out var value, out var error))
             return error;
 
         _causalContext.MergeIn(cc, Math.Max);
@@ -70,7 +70,7 @@ public class MaelstromClientHandler(IClientApi client) : IRpcServerHandler<Reque
 
         // yes, this is not very atomic
         var (values, cc) = await client.Get(body.key, cancellationToken: ct);
-        if (!GetSingleValue(body.key, values, out var value, out var error))
+        if (!TryGetSingleValue(body.key, values, out var value, out var error))
             return error;
 
         if (value != body.from)
@@ -81,28 +81,22 @@ public class MaelstromClientHandler(IClientApi client) : IRpcServerHandler<Reque
         return new CasOkResponse();
     }
 
-    private bool GetSingleValue(string key, Value[] values, out string value, [NotNullWhen(false)] out ErrorResponse? error)
+    private static bool TryGetSingleValue(string key, Value[] values, out string value, [NotNullWhen(false)] out ErrorResponse? error)
     {
+        error = null;
         value = string.Empty;
-        var count = 0;
-        for (var i = 0; i < values.Length && count < 2; i++)
+        switch (values.Length)
         {
-            var v = values[i];
-            if (v.IsEmpty || string.Equals(v.Data, value))
-                continue;
-
-            value = v.Data;
-            count++;
+            case 0:
+                error = new ErrorResponse(ErrorCode.KeyDoesNotExist, $"key {key} does not exist");
+                return false;
+            case 1:
+                value = values[0].Data ?? string.Empty;
+                return true;
+            default:
+                error = new ErrorResponse(ErrorCode.Abort, $"key {key} has concurrent values: {values.AsCsv()}");
+                return false;
         }
-
-        error = count switch
-        {
-            0 => new ErrorResponse(ErrorCode.KeyDoesNotExist, $"key {key} does not exist"),
-            > 1 => new ErrorResponse(ErrorCode.Abort, $"key {key} has concurrent values: {values.AsCsv()}"),
-            _ => default
-        };
-
-        return count == 1;
     }
 
     private Task<ResponseBase> Handle(MessageBase msg, CancellationToken _2)

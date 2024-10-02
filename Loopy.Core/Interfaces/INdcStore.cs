@@ -6,6 +6,8 @@ internal interface INdcStore
 {
     NdcObject Fetch(Key k);
 
+    event EventHandler<(Key, NdcObject)> ValueChanged;
+
     void StripCausality();
 
     ModeSyncRequest GetSyncRequest();

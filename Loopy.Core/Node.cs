@@ -25,6 +25,19 @@ internal partial class Node
         Stores[ConsistencyMode.FifoP1] = new FifoStore(Context, Priority.P1);
         Stores[ConsistencyMode.FifoP2] = new FifoStore(Context, Priority.P2);
         Stores[ConsistencyMode.FifoP3] = new FifoStore(Context, Priority.P3);
+
+        foreach (var store in Stores.Values)
+            store.ValueChanged += OnValueChanged;
+    }
+
+    private void OnValueChanged(object? sender, (Key, NdcObject) e)
+    {
+        var store = (INdcStore)sender!;
+        var cm = Stores.First(kv => kv.Value.Equals(sender)).Key;
+        var (k, obj) = e;
+
+        Context.NotificationStrategy.NotifyValueChanged(
+            k, cm, obj.DotValues.GetDistinctValues(), obj.CausalContext);
     }
 
     /// <summary>

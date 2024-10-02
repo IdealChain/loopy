@@ -34,10 +34,7 @@ internal partial class Node
             obj = await GetFromReplicaQuorum(k, quorum, mode, cancellationToken);
 
         Logger.Debug("returning {Obj}", obj);
-        var values = obj.DotValues.Values
-            .Where(v => !v.value.IsEmpty)
-            .Select(v => v.value).ToArray();
-        return (values, obj.CausalContext);
+        return (obj.DotValues.GetDistinctValues(), obj.CausalContext);
     }
 
     private async Task<NdcObject> GetFromReplicaQuorum(Key k, int quorum, ConsistencyMode mode, CancellationToken cancellationToken)

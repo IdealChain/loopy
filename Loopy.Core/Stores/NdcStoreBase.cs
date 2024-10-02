@@ -45,6 +45,8 @@ internal abstract class NdcStoreBase(INodeContext context) : INdcStore
         return obj.Fill(NodeClock, Context.ReplicationStrategy.GetReplicaNodes(k));
     }
 
+    public event EventHandler<(Key, NdcObject)>? ValueChanged;
+
     protected virtual NdcObject Update(Key k, NdcObject o)
     {
         var f = Fetch(k);
@@ -55,6 +57,11 @@ internal abstract class NdcStoreBase(INodeContext context) : INdcStore
 
     protected virtual void Store(Key k, NdcObject o)
     {
+        // capture existing dots for change notification
+        var dotSet = Storage.TryGetValue(k, out var existingObject) ?
+            new HashSet<Dot>(existingObject.DotValues.Keys) : new HashSet<Dot>();
+
+        var unstripped = o;
         o = o.Strip(NodeClock);
 
         // remove object if there are only null values left and cc is empty
@@ -75,6 +82,14 @@ internal abstract class NdcStoreBase(INodeContext context) : INdcStore
             NonStrippedKeys.Remove(k);
         else
             NonStrippedKeys.Add(k);
+
+        // suppress event if the dots contained in the object did not change
+        if (ValueChanged != null)
+        {
+            dotSet.SymmetricExceptWith(o.DotValues.Keys);
+            if (dotSet.Count > 0)
+                ValueChanged.Invoke(this, (k, unstripped));
+        }
     }
 
     public void StripCausality()

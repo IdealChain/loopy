@@ -1,10 +1,12 @@
 ﻿using Loopy.Comm.Interfaces;
 using Loopy.Comm.MaelstromMessages;
+using Loopy.Comm.NdcMessages;
 using Loopy.Comm.Rpc;
 using Loopy.Comm.Sockets;
 using Loopy.Core.Api;
 using Loopy.Core.Data;
 using Loopy.Core.Enums;
+using Loopy.Core.Interfaces;
 using NLog;
 using System.Diagnostics;
 
@@ -50,7 +52,9 @@ public class MaelstromApi(IAsyncSocket<Envelope> msgSocket)
             AntiEntropyTimeout = TimeSpan.FromSeconds(3),
             HeartbeatInterval = TimeSpan.FromSeconds(3),
         };
+        context.NotificationStrategy = new MaelstromNotificationStrategy(msgSocket, $"n{nodeId.Id}", ConsistencyMode);
 
+        var clientServer = new NetMQRpcServer<NdcMessage>(NetMQRpcDefaults.ClientApiPort, nodeId);
         var maelstromServer = new MaelstromRpcServer(msgSocket, $"n{nodeId.Id}");
         var clientApi = context.GetClientApi();
         clientApi.ConsistencyMode = ConsistencyMode;
@@ -60,7 +64,29 @@ public class MaelstromApi(IAsyncSocket<Envelope> msgSocket)
         Logger.Info("starting {Node} ({Mode}, {Quorum})", nodeId, clientApi.ConsistencyMode, clientApi.ReadQuorum);
         await await Task.WhenAny(
             maelstromServer.ServeAsync(new MaelstromClientHandler(clientApi), ct),
+            clientServer.ServeAsync(new RpcClientApiHandler(context.GetClientApi()), ct),
             maelstromServer.ServeAsync(new MaelstromNdcHandler(nodeApi), ct),
             context.BackgroundTasks.Run(ct));
+    }
+
+    private class MaelstromNotificationStrategy(IAsyncSocket<Envelope> msgSocket, string addr, ConsistencyMode cm)
+        : INotificationStrategy
+    {
+        public void NotifyValueChanged(Key key, ConsistencyMode changedCm, Value[] values, CausalContext cc)
+        {
+            if (changedCm != cm)
+                return;
+
+            // write to the global lin-kv store so the event shows up in the logfile
+            var singleValue = values.Length == 1 ? values[0] : Value.None;
+            var env = new Envelope
+            {
+                src = addr,
+                dest = "lin-kv",
+                body = new WriteRequest(key.Name, singleValue.Data ?? string.Empty)
+            };
+            env.body.msg_id = MessageBase.GetUniqueId();
+            _ = msgSocket.SendAsync(env);
+        }
     }
 }

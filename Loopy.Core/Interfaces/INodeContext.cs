@@ -23,6 +23,8 @@ public interface INodeContext
     /// </summary>
     IReplicationStrategy ReplicationStrategy { get; }
 
+    INotificationStrategy NotificationStrategy { get; }
+
     /// <summary>
     /// Gets the node-to-node RPC API 
     /// </summary>

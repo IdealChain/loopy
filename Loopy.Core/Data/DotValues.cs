@@ -14,4 +14,10 @@ public class DotValues : Map<Dot, (Value value, int[] fifoDistances)>
     }
 
     public override string ToString() => this.AsCsv(kv => $"{kv.Key}={kv.Value.value}");
+
+    public Value[] GetDistinctValues() => Values
+            .Select(v => v.value)
+            .Where(v => !v.IsEmpty)
+            .Distinct()
+            .ToArray();
 }
