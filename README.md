@@ -1,7 +1,9 @@
 Loopy: distributed KV data store
 ================================
 
-Prototype implementation for my master's thesis.
+Prototype implementation for my diploma thesis:
+
+Daniel Achleitner. *An Efficient Data Store for a Dependable Distributed Control Unit*. Diploma Thesis, Technische Universität Wien, 2024. DOI: [10.34726/hss.2024.115921](https://doi.org/10.34726/hss.2024.115921).
 
 Features
 --------
